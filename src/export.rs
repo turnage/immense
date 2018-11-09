@@ -13,8 +13,8 @@ pub enum ExportError {
     },
 }
 
-fn render_obj(
-    mesh: &Mesh,
+pub fn render_obj(
+    mesh: Mesh,
     vertex_offset: usize,
     mut sink: impl io::Write,
 ) -> Result<(), ExportError> {
@@ -24,7 +24,7 @@ fn render_obj(
     for face in &mesh.faces {
         write!(&mut sink, "f ")?;
         for vertex_index in face {
-            write!(&mut sink, " {}", vertex_index)?;
+            write!(&mut sink, " {}", vertex_index + vertex_offset)?;
         }
         write!(&mut sink, "\n")?;
     }
