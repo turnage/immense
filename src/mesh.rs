@@ -14,7 +14,8 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn apply_parameters(mut self, parameters: &Parameters) -> Self {
+    pub fn apply_parameters(mut self, parameters: Parameters) -> Self {
+        println!("Applying {:?} to mesh.", parameters);
         for vert in &mut self.vertices {
             *vert = parameters.transform * (*vert);
         }
