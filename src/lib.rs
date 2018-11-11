@@ -14,12 +14,10 @@ pub use crate::parameters::*;
 use crate::error::Result;
 use std::io;
 
-pub fn render_scene(
-    parameters: parameters::Parameters,
-    rule: Rule,
-    mut sink: impl io::Write,
-) -> Result<()> {
-    let meshes = rule.build(parameters);
+pub fn render_scene(rule: impl RuleBuilder, mut sink: impl io::Write) -> Result<()> {
+    let meshes = rule
+        .build_rule(Rule::default())
+        .build(Parameters::default());
     let mut vertex_offset = 0;
     for mesh in meshes {
         let vertex_count = mesh.vertices.len();

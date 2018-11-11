@@ -1,8 +1,17 @@
 use crate::parameters::Parameters;
 use nalgebra::Matrix4;
 
+pub(crate) fn identity() -> Matrix4<f32> {
+    Matrix4::new(
+                1.0, 0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, 0.0, //
+                0.0, 0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, 1.0,
+            )
+}
+
 pub trait Transform {
-    fn transform(&self, parameters: Parameters) -> Vec<Parameters>;
+    fn transform(&self) -> Vec<Matrix4<f32>>;
 }
 
 pub struct Replicate<T> {
@@ -20,17 +29,16 @@ impl<T> Replicate<T> {
 }
 
 impl<T: Transform> Transform for Replicate<T> {
-    fn transform(&self, parameters: Parameters) -> Vec<Parameters> {
-        let mut current_parameters = self.replicated_transform.transform(parameters);
-        let mut emitted_parameters = current_parameters.clone();
+    fn transform(&self) -> Vec<Matrix4<f32>> {
+        let matrices = self.replicated_transform.transform();
+        let mut current_matrices: Vec<Matrix4<f32>> = matrices.iter().map(|_| identity()).collect();
+        let mut replicated_matrices = current_matrices.clone();
         for i in 0..self.n {
-            current_parameters = current_parameters
-                .into_iter()
-                .flat_map(|p| self.replicated_transform.transform(p))
-                .collect();
-            emitted_parameters.append(&mut current_parameters.clone());
+            let mut next_matrices: Vec<Matrix4<f32>> = matrices.iter().enumerate().map(|(i, m)| m * current_matrices[i]).collect();
+            current_matrices = next_matrices.clone();
+            replicated_matrices.append(&mut next_matrices);
         }
-        emitted_parameters
+        replicated_matrices
     }
 }
 
@@ -63,15 +71,12 @@ impl Translate {
 }
 
 impl Transform for Translate {
-    fn transform(&self, parameters: Parameters) -> Vec<Parameters> {
-        vec![Parameters {
-            transform: Matrix4::new(
+    fn transform(&self) -> Vec<Matrix4<f32>> {
+        vec![Matrix4::new(
                 1.0, 0.0, 0.0, self.x, //
                 0.0, 1.0, 0.0, self.y, //
                 0.0, 0.0, 1.0, self.z, //
                 0.0, 0.0, 0.0, 1.0,
-            ) * parameters.transform,
-            ..parameters
-        }]
+            )]
     }
 }
