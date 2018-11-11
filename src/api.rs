@@ -65,10 +65,12 @@ impl Rule {
             transforms: {
                 let mut transforms = vec![];
                 for prefix in tf.transform() {
+                    println!("applying {:?}", prefix);
                     for suffix in &self.transforms {
                         transforms.push(prefix * (*suffix));
                     }
                 }
+                println!("transforms: {:?}", transforms);
                 transforms
             },
             ..self
@@ -93,29 +95,27 @@ impl Rule {
         Rule::compile(vec![], vec![], parameters, self)
     }
 
-    fn expand(self, parameters: Parameters) -> Either<Mesh, Vec<Invocation>> {
-        let transforms = self.transforms;
+    fn expand(self, parameters: Parameters) -> Either<Vec<Mesh>, Vec<Invocation>> {
+        let parameters: Vec<Parameters> = self.transforms.iter()
+                            .map(|t| Parameters {
+                                transform: parameters.transform * (*t),
+                                ..parameters
+                            }).collect();
         match self.inner {
             RuleInner::Invocations(invocations) => Either::Right(
                 invocations
                     .into_iter()
                     .flat_map(|rule_builder| {
                         let rule = rule_builder.build_rule(Rule::default());
-                        transforms
-                            .iter()
-                            .map(|t| Parameters {
-                                transform: parameters.transform * (*t),
-                                ..parameters
-                            })
-                            .map(|parameters| Invocation {
-                                parameters,
+                        parameters.iter().map(|parameters| Invocation {
+                                parameters: *parameters,
                                 rule: rule.clone(),
                             })
                             .collect::<Vec<Invocation>>()
                     })
                     .collect(),
             ),
-            RuleInner::Mesh(mesh) => Either::Left(mesh.apply_parameters(parameters)),
+            RuleInner::Mesh(mesh) => Either::Left(parameters.iter().map(|parameters| mesh.clone().apply_parameters(*parameters)).collect()),
         }
     }
 
@@ -126,8 +126,8 @@ impl Rule {
         rule: Rule,
     ) -> Vec<Mesh> {
         match rule.expand(parameters) {
-            Either::Left(mesh) => {
-                meshes.push(mesh);
+            Either::Left(mut new_meshes) => {
+                meshes.append(&mut new_meshes);
             }
             Either::Right(mut next_invocations) => {
                 invocations.append(&mut next_invocations);

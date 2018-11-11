@@ -19,6 +19,14 @@ pub struct Replicate<T> {
     replicated_transform: T,
 }
 
+impl<T: Copy> Copy for Replicate<T> {}
+
+impl<T: Copy> Clone for Replicate<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 impl<T> Replicate<T> {
     pub fn n(n: usize, replicated_transform: T) -> Self {
         Self {
@@ -33,7 +41,7 @@ impl<T: Transform> Transform for Replicate<T> {
         let matrices = self.replicated_transform.transform();
         let mut current_matrices: Vec<Matrix4<f32>> = matrices.iter().map(|_| identity()).collect();
         let mut replicated_matrices = current_matrices.clone();
-        for i in 0..self.n {
+        for i in 1..self.n {
             let mut next_matrices: Vec<Matrix4<f32>> = matrices.iter().enumerate().map(|(i, m)| m * current_matrices[i]).collect();
             current_matrices = next_matrices.clone();
             replicated_matrices.append(&mut next_matrices);
@@ -78,5 +86,24 @@ impl Transform for Translate {
                 0.0, 0.0, 1.0, self.z, //
                 0.0, 0.0, 0.0, 1.0,
             )]
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct Scale {
+    factor: f32
+}
+
+impl Scale {
+    pub fn by(factor: f32) -> Self {
+        Self {
+            factor
+        }
+    }
+}
+
+impl Transform for Scale {
+    fn transform(&self) -> Vec<Matrix4<f32>> {
+        vec![self.factor * identity()]
     }
 }

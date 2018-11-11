@@ -18,6 +18,7 @@ pub fn render_obj(
     vertex_offset: usize,
     mut sink: impl io::Write,
 ) -> Result<(), ExportError> {
+    write!(&mut sink, "g g{}\n", vertex_offset);
     for vertex in &mesh.vertices {
         write!(&mut sink, "v {} {} {}\n", vertex.x, vertex.y, vertex.z)?;
     }
