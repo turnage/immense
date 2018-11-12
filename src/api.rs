@@ -8,36 +8,50 @@ use crate::mesh::Mesh;
 use crate::parameters::Parameters;
 use itertools::Either;
 use nalgebra::Matrix4;
+use std::fmt;
 use std::rc::Rc;
 
+/// A mesh or a composition of subrules to expand until meshes are generated.
 #[derive(Clone)]
 pub struct Rule {
-    transforms: Vec<Matrix4<f32>>,
+    transforms: Rc<Fn(Matrix4<f32>) -> Vec<Matrix4<f32>>>,
     inner: RuleInner,
+}
+
+pub trait ToRule: fmt::Debug {
+    fn to_rule(&self) -> Rule;
+}
+
+/// A trait for types that be converted into or produce ```Rule```s.
+impl ToRule for Rule {
+    fn to_rule(&self) -> Rule {
+        self.clone()
+    }
+}
+
+impl fmt::Debug for Rule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Rule {{ transforms: {:?}, inner: {:?} }}",
+            (self.transforms)(identity()),
+            self.inner
+        )
+    }
 }
 
 impl Default for Rule {
     fn default() -> Self {
         Self {
-            transforms: vec![identity()],
+            transforms: Rc::new(|_| vec![identity()]),
             inner: RuleInner::default(),
         }
     }
 }
 
-pub trait RuleBuilder {
-    fn build_rule(&self, rule: Rule) -> Rule;
-}
-
-impl RuleBuilder for Rule {
-    fn build_rule(&self, rule: Rule) -> Rule {
-        self.clone()
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum RuleInner {
-    Invocations(Vec<Rc<RuleBuilder>>),
+    Invocations(Vec<Rc<ToRule>>),
     Mesh(Mesh),
 }
 
@@ -47,47 +61,64 @@ impl Default for RuleInner {
     }
 }
 
+#[derive(Debug)]
 struct Invocation {
     parameters: Parameters,
     rule: Rule,
 }
 
 impl Rule {
-    pub(crate) fn mesh(mesh: Mesh) -> Self {
+    pub fn new() -> Self {
+        Rule::default()
+    }
+
+    pub fn from(rule: impl ToRule + 'static) -> Self {
+        Rule::new().push(rule)
+    }
+
+    pub fn mesh(mesh: Mesh) -> Self {
         Self {
             inner: RuleInner::Mesh(mesh),
             ..Default::default()
         }
     }
 
-    pub fn tf(self, tf: impl Transform) -> Self {
+    pub fn tf(self, tf: impl Transform + 'static) -> Self {
+        let current_transforms = self.transforms;
         Self {
-            transforms: {
-                let mut transforms = vec![];
-                for prefix in tf.transform() {
-                    println!("applying {:?}", prefix);
-                    for suffix in &self.transforms {
-                        transforms.push(prefix * (*suffix));
+            transforms: Rc::new(move |transform: Matrix4<f32>| {
+                let mut emitted_transforms = vec![];
+                let transforms = current_transforms(transform);
+                for suffix in transforms {
+                    for prefix in tf.transform(suffix) {
+                        emitted_transforms.push(prefix * suffix);
                     }
                 }
-                println!("transforms: {:?}", transforms);
-                transforms
-            },
+                emitted_transforms
+            }),
             ..self
         }
     }
 
-    pub fn push(self, rule: impl RuleBuilder + 'static) -> Self {
-        if let RuleInner::Invocations(mut invocations) = self.inner {
-            Self {
+    pub fn push(self, rule: impl ToRule + 'static) -> Self {
+        match self.inner {
+            RuleInner::Invocations(mut invocations) => Self {
                 inner: RuleInner::Invocations({
                     invocations.push(Rc::new(rule));
                     invocations
                 }),
                 ..self
-            }
-        } else {
-            self
+            },
+            inner @ RuleInner::Mesh(_) => Self {
+                inner: RuleInner::Invocations(vec![
+                    Rc::new(Self {
+                        transforms: self.transforms,
+                        inner,
+                    }),
+                    Rc::new(rule),
+                ]),
+                ..Rule::default()
+            },
         }
     }
 
@@ -96,26 +127,34 @@ impl Rule {
     }
 
     fn expand(self, parameters: Parameters) -> Either<Vec<Mesh>, Vec<Invocation>> {
-        let parameters: Vec<Parameters> = self.transforms.iter()
-                            .map(|t| Parameters {
-                                transform: parameters.transform * (*t),
-                                ..parameters
-                            }).collect();
+        let parameters: Vec<Parameters> = (self.transforms)(parameters.transform)
+            .iter()
+            .map(|transform| Parameters {
+                transform: parameters.transform * (*transform),
+                ..parameters
+            })
+            .collect();
         match self.inner {
             RuleInner::Invocations(invocations) => Either::Right(
                 invocations
                     .into_iter()
-                    .flat_map(|rule_builder| {
-                        let rule = rule_builder.build_rule(Rule::default());
-                        parameters.iter().map(|parameters| Invocation {
+                    .flat_map(|rule| {
+                        parameters
+                            .iter()
+                            .map(|parameters| Invocation {
                                 parameters: *parameters,
-                                rule: rule.clone(),
+                                rule: rule.to_rule(),
                             })
                             .collect::<Vec<Invocation>>()
                     })
                     .collect(),
             ),
-            RuleInner::Mesh(mesh) => Either::Left(parameters.iter().map(|parameters| mesh.clone().apply_parameters(*parameters)).collect()),
+            RuleInner::Mesh(mesh) => Either::Left(
+                parameters
+                    .iter()
+                    .map(|parameters| mesh.clone().apply_parameters(*parameters))
+                    .collect(),
+            ),
         }
     }
 
