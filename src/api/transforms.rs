@@ -1,6 +1,8 @@
 use crate::mesh::{vertex, Vertex};
 use crate::parameters::Parameters;
 use nalgebra::Matrix4;
+use std::fmt;
+use std::rc::Rc;
 
 pub(crate) fn identity() -> Matrix4<f32> {
     Matrix4::new(
@@ -9,6 +11,16 @@ pub(crate) fn identity() -> Matrix4<f32> {
         0.0, 0.0, 1.0, 0.0, //
         0.0, 0.0, 0.0, 1.0,
     )
+}
+
+/// Wraps a transform matrix in a temporary relocation to the origin.
+fn about_origin(current_transform: Matrix4<f32>, next_transform: Matrix4<f32>) -> Matrix4<f32> {
+    let translation: Vertex = current_transform * vertex(0.0, 0.0, 0.0);
+    let untranslate = Translate::by(-translation.x, -translation.y, -translation.z)
+        .transform(current_transform)[0];
+    let retranslate =
+        Translate::by(translation.x, translation.y, translation.z).transform(current_transform)[0];
+    retranslate * next_transform * untranslate
 }
 
 /// Transform describes a type which can generate transform matrices for mesh generation.
@@ -23,6 +35,73 @@ pub trait Transform {
 impl Transform for &[Matrix4<f32>] {
     fn transform(&self, _: Matrix4<f32>) -> Vec<Matrix4<f32>> {
         self.to_vec()
+    }
+}
+
+#[derive(Default, Clone, Copy, Debug)]
+struct Identity;
+
+impl Transform for Identity {
+    fn transform(&self, _: Matrix4<f32>) -> Vec<Matrix4<f32>> {
+        vec![identity()]
+    }
+}
+
+/// A sequence of transforms.
+#[derive(Clone)]
+pub struct Seq {
+    transforms: Vec<Rc<Transform>>,
+}
+
+impl Default for Seq {
+    fn default() -> Seq {
+        Self {
+            transforms: vec![Rc::new(Identity {})],
+        }
+    }
+}
+
+impl fmt::Debug for Seq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Seq {{ transforms: {} }}", self.transforms.len(),)
+    }
+}
+
+impl Seq {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(mut self, transform: impl Transform + 'static) -> Self {
+        self.transforms.push(Rc::new(transform));
+        self
+    }
+
+    fn descend<'a>(
+        current_transform: Matrix4<f32>,
+        emit_queue: Option<Matrix4<f32>>,
+        mut next_transforms: impl Iterator<Item = &'a Rc<Transform>> + Clone,
+    ) -> Vec<Matrix4<f32>> {
+        match next_transforms.next() {
+            Some(tf) => {
+                let mut emitted = vec![];
+                for t in tf.transform(current_transform) {
+                    emitted.append(&mut Seq::descend(
+                        current_transform * t,
+                        Some(emit_queue.unwrap_or(identity()) * t),
+                        next_transforms.clone(),
+                    ));
+                }
+                emitted
+            }
+            None => emit_queue.map(|e| vec![e]).unwrap_or(vec![]),
+        }
+    }
+}
+
+impl Transform for Seq {
+    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
+        Seq::descend(current_transform, None, self.transforms.iter())
     }
 }
 
@@ -51,21 +130,18 @@ impl<T> Replicate<T> {
     }
 }
 
-impl<T: Transform> Transform for Replicate<T> {
+impl<T: Transform + Clone + 'static> Transform for Replicate<T> {
     fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        let matrices = self.replicated_transform.transform(current_transform);
-        let mut current_matrices: Vec<Matrix4<f32>> = matrices.iter().map(|_| identity()).collect();
-        let mut replicated_matrices = current_matrices.clone();
+        let mut emitted = vec![Seq::new().push(Identity {})];
         for i in 1..self.n {
-            let mut next_matrices: Vec<Matrix4<f32>> = matrices
-                .iter()
-                .enumerate()
-                .map(|(i, m)| m * current_matrices[i])
-                .collect();
-            current_matrices = next_matrices.clone();
-            replicated_matrices.append(&mut next_matrices);
+            emitted.push((0..i).fold(Seq::new(), |seq, _| {
+                seq.push(self.replicated_transform.clone())
+            }));
         }
-        replicated_matrices
+        emitted
+            .into_iter()
+            .flat_map(|seq| seq.transform(current_transform))
+            .collect()
     }
 }
 
@@ -129,29 +205,60 @@ impl Scale {
 
 impl Transform for Scale {
     fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        let translation: Vertex = current_transform * vertex(0.0, 0.0, 0.0);
-        let untranslate = Translate::by(-translation.x, -translation.y, -translation.z)
-            .transform(current_transform)[0];
-        let retranslate = Translate::by(translation.x, translation.y, translation.z)
-            .transform(current_transform)[0];
+        #[rustfmt::skip]
         let coord_scaler = Matrix4::new(
-            self.factor,
-            0.0,
-            0.0,
-            0.0, //
-            0.0,
-            self.factor,
-            0.0,
-            0.0, //
-            0.0,
-            0.0,
-            self.factor,
-            0.0, //
-            0.0,
-            0.0,
-            0.0,
-            1.0,
+            self.factor, 0.0, 0.0, 0.0, //
+            0.0, self.factor, 0.0, 0.0, //
+            0.0, 0.0, self.factor, 0.0, //
+            0.0, 0.0, 0.0, 1.0,
         );
-        vec![retranslate * coord_scaler * untranslate]
+        vec![about_origin(current_transform, coord_scaler)]
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Rotate {
+    X(f32),
+    Y(f32),
+    Z(f32),
+}
+
+impl Rotate {
+    pub fn x(x: f32) -> Self {
+        Rotate::X(x.to_radians())
+    }
+
+    pub fn y(y: f32) -> Self {
+        Rotate::Y(y.to_radians())
+    }
+
+    pub fn z(z: f32) -> Self {
+        Rotate::Z(z.to_radians())
+    }
+}
+
+impl Transform for Rotate {
+    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
+        #[rustfmt::skip]
+        vec![match *self {
+            Rotate::X(r) => about_origin(current_transform, Matrix4::new(
+                1.0, 0.0,      0.0,      0.0, //
+                0.0, r.cos(),  -r.sin(), 0.0, //
+                0.0, r.sin(),  r.cos(),  0.0, //
+                0.0, 0.0,      0.0,      1.0
+            )),
+            Rotate::Y(r) => about_origin(current_transform, Matrix4::new(
+                r.cos(),  0.0, r.sin(), 0.0, //
+                0.0,      1.0, 0.0,     0.0, //
+                -r.sin(), 0.0, r.cos(), 0.0, //
+                0.0,      0.0, 0.0,     1.0
+            )),
+            Rotate::Z(r) => about_origin(current_transform, Matrix4::new(
+                r.cos(), -r.sin(), 0.0, 0.0, //
+                r.sin(), r.cos(),  0.0, 0.0, //
+                0.0,     0.0,      1.0, 0.0, //
+                0.0,     0.0,      0.0, 1.0
+            ))
+        }]
     }
 }

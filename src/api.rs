@@ -12,9 +12,9 @@ use std::fmt;
 use std::rc::Rc;
 
 /// A mesh or a composition of subrules to expand until meshes are generated.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Rule {
-    transforms: Rc<Fn(Matrix4<f32>) -> Vec<Matrix4<f32>>>,
+    transforms: Seq,
     inner: RuleInner,
 }
 
@@ -34,18 +34,9 @@ impl fmt::Debug for Rule {
         write!(
             f,
             "Rule {{ transforms: {:?}, inner: {:?} }}",
-            (self.transforms)(identity()),
+            self.transforms.transform(identity()),
             self.inner
         )
-    }
-}
-
-impl Default for Rule {
-    fn default() -> Self {
-        Self {
-            transforms: Rc::new(|_| vec![identity()]),
-            inner: RuleInner::default(),
-        }
     }
 }
 
@@ -84,18 +75,8 @@ impl Rule {
     }
 
     pub fn tf(self, tf: impl Transform + 'static) -> Self {
-        let current_transforms = self.transforms;
         Self {
-            transforms: Rc::new(move |transform: Matrix4<f32>| {
-                let mut emitted_transforms = vec![];
-                let transforms = current_transforms(transform);
-                for suffix in transforms {
-                    for prefix in tf.transform(suffix) {
-                        emitted_transforms.push(prefix * suffix);
-                    }
-                }
-                emitted_transforms
-            }),
+            transforms: self.transforms.push(tf),
             ..self
         }
     }
@@ -110,13 +91,7 @@ impl Rule {
                 ..self
             },
             inner @ RuleInner::Mesh(_) => Self {
-                inner: RuleInner::Invocations(vec![
-                    Rc::new(Self {
-                        transforms: self.transforms,
-                        inner,
-                    }),
-                    Rc::new(rule),
-                ]),
+                inner: RuleInner::Invocations(vec![Rc::new(Self { inner, ..self }), Rc::new(rule)]),
                 ..Rule::default()
             },
         }
@@ -127,7 +102,9 @@ impl Rule {
     }
 
     fn expand(self, parameters: Parameters) -> Either<Vec<Mesh>, Vec<Invocation>> {
-        let parameters: Vec<Parameters> = (self.transforms)(parameters.transform)
+        let parameters: Vec<Parameters> = self
+            .transforms
+            .transform(parameters.transform)
             .iter()
             .map(|transform| Parameters {
                 transform: parameters.transform * (*transform),
