@@ -1,5 +1,4 @@
-use crate::parameters::Parameters;
-use nalgebra::Matrix4x1;
+use nalgebra::{Matrix4, Matrix4x1};
 
 pub type Vertex = Matrix4x1<f32>;
 
@@ -14,9 +13,9 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn apply_parameters(mut self, parameters: Parameters) -> Self {
+    pub fn apply_matrix(mut self, matrix: Matrix4<f32>) -> Self {
         for vert in &mut self.vertices {
-            *vert = parameters.transform * (*vert);
+            *vert = matrix * (*vert);
         }
         self
     }

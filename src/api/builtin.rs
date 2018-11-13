@@ -1,10 +1,12 @@
-use crate::api::Rule;
-use crate::mesh::{vertex, Mesh, Vertex};
-use crate::parameters::Parameters;
-use lazy_static::lazy_static;
+use crate::api::{RuleRef, System};
+use crate::mesh::{vertex, Mesh};
 
-pub fn cube() -> Rule {
-    Rule::mesh(Mesh {
+pub fn cube() -> RuleRef {
+    System::RULE_CUBE
+}
+
+pub(super) fn cube_mesh() -> Mesh {
+    Mesh {
         vertices: vec![
             vertex(-0.5, 0.5, 0.5),
             vertex(-0.5, -0.5, 0.5),
@@ -23,5 +25,5 @@ pub fn cube() -> Rule {
             vec![5, 6, 2, 1],
             vec![2, 6, 7, 3],
         ],
-    })
+    }
 }

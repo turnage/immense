@@ -1,10 +1,8 @@
-use crate::mesh::{vertex, Vertex};
-use crate::parameters::Parameters;
-use nalgebra::Matrix4;
-use std::fmt;
-use std::rc::Rc;
+use crate::mesh::{vertex, Mesh, Vertex};
+use nalgebra::{Matrix3, Matrix4, Vector3};
+use std::iter;
 
-pub(crate) fn identity() -> Matrix4<f32> {
+fn identity() -> Matrix4<f32> {
     Matrix4::new(
         1.0, 0.0, 0.0, 0.0, //
         0.0, 1.0, 0.0, 0.0, //
@@ -13,135 +11,200 @@ pub(crate) fn identity() -> Matrix4<f32> {
     )
 }
 
-/// Wraps a transform matrix in a temporary relocation to the origin.
-fn about_origin(current_transform: Matrix4<f32>, next_transform: Matrix4<f32>) -> Matrix4<f32> {
-    let translation: Vertex = current_transform * vertex(0.0, 0.0, 0.0);
-    let untranslate = Translate::by(-translation.x, -translation.y, -translation.z)
-        .transform(current_transform)[0];
-    let retranslate =
-        Translate::by(translation.x, translation.y, translation.z).transform(current_transform)[0];
-    retranslate * next_transform * untranslate
+pub type Tf = Transform;
+
+#[derive(Copy, Clone, Debug)]
+pub struct Transform {
+    spatial: Matrix4<f32>,
 }
 
-/// Transform describes a type which can generate transform matrices for mesh generation.
-pub trait Transform {
-    // transform should return the matrices that should be multiplied with the current transform in
-    // order to apply. The current transform should not be multiplied in this method; it is provided
-    // so that transforms which must be aware of the current state (e.g. Scale in case of a
-    // translated origin) can generate a correct matrix.
-    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>>;
-}
-
-impl Transform for &[Matrix4<f32>] {
-    fn transform(&self, _: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        self.to_vec()
+impl Transform {
+    pub(crate) fn cons(&self, other: Transform) -> Transform {
+        let translation: Vertex = self.spatial * vertex(0.0, 0.0, 0.0);
+        let retranslate = Translate::by(translation.x, translation.y, translation.z);
+        let untranslate = Translate::by(-translation.x, -translation.y, -translation.z);
+        // TODO: determine when translation to origin is necessary if ever.
+        Transform {
+            spatial: self.spatial * other.spatial,
+        }
     }
-}
 
-#[derive(Default, Clone, Copy, Debug)]
-struct Identity;
-
-impl Transform for Identity {
-    fn transform(&self, _: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        vec![identity()]
+    pub(crate) fn apply_to(&self, mesh: Mesh) -> Mesh {
+        mesh.apply_matrix(self.spatial)
     }
-}
 
-/// A sequence of transforms.
-#[derive(Clone)]
-pub struct Seq {
-    transforms: Vec<Rc<Transform>>,
-}
-
-impl Default for Seq {
-    fn default() -> Seq {
+    pub fn tx(x: f32) -> Self {
         Self {
-            transforms: vec![Rc::new(Identity {})],
+            spatial: Translate::x(x),
+            ..Self::default()
         }
     }
-}
 
-impl fmt::Debug for Seq {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Seq {{ transforms: {} }}", self.transforms.len(),)
-    }
-}
-
-impl Seq {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn ty(y: f32) -> Self {
+        Self {
+            spatial: Translate::y(y),
+            ..Self::default()
+        }
     }
 
-    pub fn push(mut self, transform: impl Transform + 'static) -> Self {
-        self.transforms.push(Rc::new(transform));
-        self
+    pub fn tz(z: f32) -> Self {
+        Self {
+            spatial: Translate::z(z),
+            ..Self::default()
+        }
     }
 
-    fn descend<'a>(
-        current_transform: Matrix4<f32>,
-        emit_queue: Option<Matrix4<f32>>,
-        mut next_transforms: impl Iterator<Item = &'a Rc<Transform>> + Clone,
-    ) -> Vec<Matrix4<f32>> {
-        match next_transforms.next() {
-            Some(tf) => {
-                let mut emitted = vec![];
-                for t in tf.transform(current_transform) {
-                    emitted.append(&mut Seq::descend(
-                        current_transform * t,
-                        Some(emit_queue.unwrap_or(identity()) * t),
-                        next_transforms.clone(),
-                    ));
-                }
-                emitted
+    pub fn s(factor: f32) -> Self {
+        Self {
+            spatial: Scale::all(factor),
+            ..Self::default()
+        }
+    }
+
+    pub fn rx(x: f32) -> Self {
+        Self {
+            spatial: Rotate::x(x),
+            ..Self::default()
+        }
+    }
+
+    pub fn ry(y: f32) -> Self {
+        Self {
+            spatial: Rotate::y(y),
+            ..Self::default()
+        }
+    }
+
+    pub fn rz(z: f32) -> Self {
+        Self {
+            spatial: Rotate::z(z),
+            ..Self::default()
+        }
+    }
+
+    // Multiplicatively branch transforms.
+    fn cross(parents: Vec<Transform>, children: Vec<Transform>) -> Vec<Transform> {
+        let mut emitted = vec![];
+        emitted.reserve(parents.len() * children.len());
+        for parent in parents {
+            for child in &children {
+                emitted.push(parent.cons(*child));
             }
-            None => emit_queue.map(|e| vec![e]).unwrap_or(vec![]),
+        }
+        emitted
+    }
+
+    fn coalesce(default: Option<Transform>, source: impl Iterator<Item = Transform>) -> Self {
+        source.fold(default.unwrap_or(Transform::default()), |prefix, suffix| {
+            prefix.cons(suffix)
+        })
+    }
+
+    fn stack(self, n: usize) -> Self {
+        Transform::coalesce(Some(self), iter::repeat(self).take(n))
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            spatial: identity(),
         }
     }
 }
 
-impl Transform for Seq {
-    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        Seq::descend(current_transform, None, self.transforms.iter())
+#[derive(Debug)]
+pub enum TransformInput {
+    Single(Transform),
+    Many(Vec<Transform>),
+}
+
+impl Into<Vec<Transform>> for TransformInput {
+    fn into(self) -> Vec<Transform> {
+        match self {
+            TransformInput::Single(transform) => vec![transform],
+            TransformInput::Many(transforms) => transforms,
+        }
+    }
+}
+
+impl From<Transform> for TransformInput {
+    fn from(transform: Transform) -> Self {
+        TransformInput::Single(transform)
+    }
+}
+
+impl From<Vec<Transform>> for TransformInput {
+    fn from(transforms: Vec<Transform>) -> Self {
+        TransformInput::Single(Transform::coalesce(None, transforms.into_iter()))
+    }
+}
+
+impl From<&[Transform]> for TransformInput {
+    fn from(transforms: &[Transform]) -> Self {
+        TransformInput::Single(Transform::coalesce(None, transforms.iter().map(|t| *t)))
+    }
+}
+
+impl From<Option<Transform>> for TransformInput {
+    fn from(maybe_input: Option<Transform>) -> Self {
+        match maybe_input {
+            Some(input) => input.into(),
+            None => TransformInput::Many(vec![]),
+        }
+    }
+}
+
+impl From<Vec<Replicate>> for TransformInput {
+    fn from(replications: Vec<Replicate>) -> TransformInput {
+        let mut emitted = vec![];
+        for replication in replications.into_iter().map(|r| -> Vec<Transform> {
+            let input: TransformInput = r.into();
+            input.into()
+        }) {
+            emitted = if emitted.is_empty() {
+                replication
+            } else {
+                Transform::cross(emitted, replication)
+            };
+        }
+        TransformInput::Many(emitted)
     }
 }
 
 /// Replicates a transform ```n``` times. The transforms will stack, so ```Replicate::n(2,
-/// Translate::x(1.0))``` on some rule will result in two invocations of the rule with
-/// ```Translate::x(1.0)``` and ```Translate::x(2.0)```.
-pub struct Replicate<T> {
+/// Tf::x(1.0))``` on some rule will result in two invocations of the rule with
+/// ```Tf::x(1.0)``` and ```Tf::x(2.0)```.
+pub struct Replicate {
     n: usize,
-    replicated_transform: T,
+    source: TransformInput,
 }
 
-impl<T: Copy> Copy for Replicate<T> {}
-
-impl<T: Copy> Clone for Replicate<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> Replicate<T> {
-    pub fn n(n: usize, replicated_transform: T) -> Self {
+impl Replicate {
+    pub fn n(n: usize, source: impl Into<TransformInput>) -> Self {
         Self {
             n,
-            replicated_transform,
+            source: source.into(),
         }
     }
 }
 
-impl<T: Transform + Clone + 'static> Transform for Replicate<T> {
-    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        let mut emitted = vec![Seq::new().push(Identity {})];
-        for i in 1..self.n {
-            emitted.push((0..i).fold(Seq::new(), |seq, _| {
-                seq.push(self.replicated_transform.clone())
-            }));
+impl Into<TransformInput> for Replicate {
+    fn into(self) -> TransformInput {
+        match self.source {
+            TransformInput::Single(transform) => {
+                TransformInput::Many((0..self.n).map(|i| transform.stack(i)).collect())
+            }
+            TransformInput::Many(transforms) => TransformInput::Many({
+                let mut emitted = vec![];
+                for transform in transforms {
+                    for i in 0..self.n {
+                        emitted.push(transform.stack(i));
+                    }
+                }
+                emitted
+            }),
         }
-        emitted
-            .into_iter()
-            .flat_map(|seq| seq.transform(current_transform))
-            .collect()
     }
 }
 
@@ -149,116 +212,84 @@ impl<T: Transform + Clone + 'static> Transform for Replicate<T> {
 /// ```Translate::x(1.0)``` in a rule transformed by ```Scale::by(2.0)``` results in an absolute
 /// translation of 2. This is almost always what you want.
 #[derive(Default, Clone, Copy, Debug)]
-pub struct Translate {
-    x: f32,
-    y: f32,
-    z: f32,
-}
+struct Translate;
 
 impl Translate {
-    pub fn by(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    pub fn x(x: f32) -> Self {
-        Self {
-            x,
-            ..Default::default()
-        }
-    }
-    pub fn y(y: f32) -> Self {
-        Self {
-            y,
-            ..Default::default()
-        }
-    }
-    pub fn z(z: f32) -> Self {
-        Self {
-            z,
-            ..Default::default()
-        }
-    }
-}
-
-impl Transform for Translate {
-    fn transform(&self, _: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        vec![Matrix4::new(
-            1.0, 0.0, 0.0, self.x, //
-            0.0, 1.0, 0.0, self.y, //
-            0.0, 0.0, 1.0, self.z, //
+    pub fn by(x: f32, y: f32, z: f32) -> Matrix4<f32> {
+        Matrix4::new(
+            1.0, 0.0, 0.0, x, //
+            0.0, 1.0, 0.0, y, //
+            0.0, 0.0, 1.0, z, //
             0.0, 0.0, 0.0, 1.0,
-        )]
+        )
+    }
+
+    pub fn x(x: f32) -> Matrix4<f32> {
+        Translate::by(x, 0.0, 0.0)
+    }
+    pub fn y(y: f32) -> Matrix4<f32> {
+        Translate::by(0.0, y, 0.0)
+    }
+    pub fn z(z: f32) -> Matrix4<f32> {
+        Translate::by(0.0, 0.0, z)
     }
 }
 
 /// Scales the rule and all following transformations.
 #[derive(Default, Clone, Copy, Debug)]
-pub struct Scale {
-    factor: f32,
-}
+struct Scale;
 
 impl Scale {
-    pub fn by(factor: f32) -> Self {
-        Self { factor }
+    pub fn all(factor: f32) -> Matrix4<f32> {
+        Scale::by(factor, factor, factor)
     }
-}
 
-impl Transform for Scale {
-    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        #[rustfmt::skip]
-        let coord_scaler = Matrix4::new(
-            self.factor, 0.0, 0.0, 0.0, //
-            0.0, self.factor, 0.0, 0.0, //
-            0.0, 0.0, self.factor, 0.0, //
+    pub fn by(x: f32, y: f32, z: f32) -> Matrix4<f32> {
+        //Translate::by(0.5, 0.5, 0.5)*
+        Matrix4::new(
+            x, 0.0, 0.0, 0.0, //
+            0.0, y, 0.0, 0.0, //
+            0.0, 0.0, z, 0.0, //
             0.0, 0.0, 0.0, 1.0,
-        );
-        vec![about_origin(current_transform, coord_scaler)]
+        )
+        //* Translate::by(-0.5, -0.5, -0.5)
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Rotate {
-    X(f32),
-    Y(f32),
-    Z(f32),
-}
+struct Rotate;
 
 impl Rotate {
-    pub fn x(x: f32) -> Self {
-        Rotate::X(x.to_radians())
-    }
-
-    pub fn y(y: f32) -> Self {
-        Rotate::Y(y.to_radians())
-    }
-
-    pub fn z(z: f32) -> Self {
-        Rotate::Z(z.to_radians())
-    }
-}
-
-impl Transform for Rotate {
-    fn transform(&self, current_transform: Matrix4<f32>) -> Vec<Matrix4<f32>> {
-        #[rustfmt::skip]
-        vec![match *self {
-            Rotate::X(r) => about_origin(current_transform, Matrix4::new(
+    #[rustfmt::skip]
+    pub fn x(x: f32) -> Matrix4<f32> {
+        let r = x.to_radians();
+        Translate::by(0.0, 0.5, 0.5) * Matrix4::new(
                 1.0, 0.0,      0.0,      0.0, //
                 0.0, r.cos(),  -r.sin(), 0.0, //
                 0.0, r.sin(),  r.cos(),  0.0, //
                 0.0, 0.0,      0.0,      1.0
-            )),
-            Rotate::Y(r) => about_origin(current_transform, Matrix4::new(
+            ) * Translate::by(0.0, -0.5, -0.5)
+    }
+
+    #[rustfmt::skip]
+    pub fn y(y: f32) -> Matrix4<f32> {
+        let r = y.to_radians();
+        Matrix4::new(
                 r.cos(),  0.0, r.sin(), 0.0, //
                 0.0,      1.0, 0.0,     0.0, //
                 -r.sin(), 0.0, r.cos(), 0.0, //
                 0.0,      0.0, 0.0,     1.0
-            )),
-            Rotate::Z(r) => about_origin(current_transform, Matrix4::new(
+            )
+    }
+
+    #[rustfmt::skip]
+    pub fn z(z: f32) -> Matrix4<f32> {
+        let r = z.to_radians();
+        Translate::by(0.5, 0.5, 0.0) * Matrix4::new(
                 r.cos(), -r.sin(), 0.0, 0.0, //
                 r.sin(), r.cos(),  0.0, 0.0, //
                 0.0,     0.0,      1.0, 0.0, //
                 0.0,     0.0,      0.0, 1.0
-            ))
-        }]
+            ) * Translate::by(-0.5, -0.5, 0.0)
     }
 }
