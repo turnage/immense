@@ -1,37 +1,31 @@
 use immense::*;
 use std::fs::File;
 
-fn recursive_tile(depth_budget: usize) -> Rule {
-    let rule = Rule::new()
-        .push(cube().tf(Translate::by(0.25, 0.25, 0.0)).tf(Scale::by(0.4)))
-        .push(
-            cube()
-                .tf(Translate::by(-0.25, -0.25, 0.0))
-                .tf(Scale::by(0.4)),
-        )
-        .push(
-            cube()
-                .tf(Translate::by(-0.25, 0.25, 0.0))
-                .tf(Scale::by(0.4)),
-        );
-    if depth_budget > 0 {
-        rule.push(
-            recursive_tile(depth_budget - 1)
-                .tf(Translate::by(0.25, -0.25, 0.0))
-                .tf(Scale::by(0.5)),
-        )
-    } else {
-        rule
+struct RecursiveTile {
+    depth_budget: usize,
+}
+
+impl ToRule for RecursiveTile {
+    fn to_rule(&self) -> Rule {
+        let rule = Rule::new()
+            .push(vec![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)], cube())
+            .push(vec![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)], cube())
+            .push(vec![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)], cube());
+        if self.depth_budget > 0 {
+            rule.push(
+                vec![Tf::t(0.25, -0.25, 0.0), Tf::s(0.4)],
+                RecursiveTile {
+                    depth_budget: self.depth_budget - 1,
+                },
+            )
+        } else {
+            rule
+        }
     }
 }
 
 fn main() {
+    let meshes = RecursiveTile { depth_budget: 4 }.to_rule().generate();
     let mut output = File::create("recursive_tile.obj").expect("obj file");
-    generate(
-        Rule::new()
-            .push(cube().tf(Translate::x(1f32)))
-            .push(recursive_tile(4)),
-        &mut output,
-    )
-    .expect("rendered scene");
+    write_meshes(meshes, &mut output).expect("rendered scene");
 }

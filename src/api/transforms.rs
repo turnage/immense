@@ -20,9 +20,6 @@ pub struct Transform {
 
 impl Transform {
     pub(crate) fn cons(&self, other: Transform) -> Transform {
-        let translation: Vertex = self.spatial * vertex(0.0, 0.0, 0.0);
-        let retranslate = Translate::by(translation.x, translation.y, translation.z);
-        let untranslate = Translate::by(-translation.x, -translation.y, -translation.z);
         // TODO: determine when translation to origin is necessary if ever.
         Transform {
             spatial: self.spatial * other.spatial,
@@ -36,6 +33,13 @@ impl Transform {
     pub fn tx(x: f32) -> Self {
         Self {
             spatial: Translate::x(x),
+            ..Self::default()
+        }
+    }
+
+    pub fn t(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            spatial: Translate::by(x, y, z),
             ..Self::default()
         }
     }
