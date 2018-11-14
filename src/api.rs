@@ -7,12 +7,12 @@ pub use self::transforms::*;
 use auto_from::auto_from;
 use crate::mesh::Mesh;
 use rayon::prelude::*;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A composition of subrules to expand until meshes are generated.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Rule {
-    invocations: Vec<(Option<Transform>, RuleRef)>,
+    invocations: Vec<(Option<Transform>, RuleInternal)>,
 }
 
 impl Rule {
@@ -22,78 +22,42 @@ impl Rule {
         }
     }
 
-    pub fn push(mut self, transforms: impl Into<TransformInput>, rule_ref: RuleRef) -> Rule {
+    pub(crate) fn push_mesh(mut self, mesh: Mesh) -> Self {
+        self.invocations.push((None, RuleInternal::Mesh(mesh)));
+        self
+    }
+
+    pub fn push(
+        mut self,
+        transforms: impl Into<TransformInput>,
+        rule: impl ToRule + 'static,
+    ) -> Rule {
         match transforms.into() {
             TransformInput::Single(transform) => {
-                self.invocations.push((Some(transform), rule_ref));
+                self.invocations
+                    .push((Some(transform), RuleInternal::Invocations(Arc::new(rule))));
             }
             TransformInput::Many(transforms) if !transforms.is_empty() => {
+                let rule = Arc::new(rule);
                 self.invocations.append(
                     &mut transforms
                         .into_iter()
-                        .map(|transform| (Some(transform), rule_ref))
+                        .map(|transform| (Some(transform), RuleInternal::Invocations(rule.clone())))
                         .collect(),
                 );
             }
 
-            _ => self.invocations.push((None, rule_ref)),
+            _ => self
+                .invocations
+                .push((None, RuleInternal::Invocations(Arc::new(rule)))),
         };
         self
     }
-}
 
-pub trait ToRule {
-    fn to_rule(&self) -> Rule;
-}
-
-impl ToRule for Rule {
-    fn to_rule(&self) -> Rule {
-        self.clone()
-    }
-}
-
-impl ToRule for RuleRef {
-    fn to_rule(&self) -> Rule {
-        Rule::new().push(None, *self)
-    }
-}
-
-#[auto_from]
-#[derive(Clone)]
-enum RuleInternal {
-    Mesh(Mesh),
-    Invocations(Rc<ToRule>),
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct RuleRef {
-    rule: usize,
-}
-
-pub struct System {
-    rules: Vec<RuleInternal>,
-}
-
-impl System {
-    const RULE_CUBE: RuleRef = RuleRef { rule: 0 };
-
-    pub fn new() -> Self {
-        Self {
-            rules: vec![cube_mesh().into()],
-        }
-    }
-
-    pub fn define(&mut self, rule: impl ToRule + 'static) -> RuleRef {
-        self.rules.push(RuleInternal::Invocations(Rc::new(rule)));
-        RuleRef {
-            rule: self.rules.len() - 1,
-        }
-    }
-
-    pub fn generate(&self, root: impl ToRule + 'static) -> Vec<Mesh> {
-        let root = RuleInternal::Invocations(Rc::new(root));
+    pub fn generate(self) -> Vec<Mesh> {
+        let root = RuleInternal::Invocations(Arc::new(self));
         let mut meshes: Vec<(Option<Transform>, Mesh)> = vec![];
-        let mut rules: Vec<(Option<Transform>, &RuleInternal)> = vec![(None, &root)];
+        let mut rules: Vec<(Option<Transform>, RuleInternal)> = vec![(None, root)];
         while let Some((transform, rule)) = rules.pop() {
             match rule {
                 RuleInternal::Mesh(mesh) => meshes.push((transform, mesh.clone())),
@@ -108,7 +72,7 @@ impl System {
                                 (Some(parent), Some(child)) => Some(parent.cons(child)),
                                 (None, Some(child)) => Some(child),
                             },
-                            &self.rules[sub_rule.rule],
+                            sub_rule,
                         ));
                     }
                 }
@@ -122,4 +86,21 @@ impl System {
             })
             .collect()
     }
+}
+
+pub trait ToRule: Send + Sync {
+    fn to_rule(&self) -> Rule;
+}
+
+impl ToRule for Rule {
+    fn to_rule(&self) -> Rule {
+        self.clone()
+    }
+}
+
+#[auto_from]
+#[derive(Clone)]
+enum RuleInternal {
+    Mesh(Mesh),
+    Invocations(Arc<ToRule>),
 }

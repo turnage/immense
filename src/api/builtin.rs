@@ -1,12 +1,13 @@
-use crate::api::{RuleRef, System};
+use crate::api::{Rule, RuleInternal};
 use crate::mesh::{vertex, Mesh};
+use lazy_static::lazy_static;
 
-pub fn cube() -> RuleRef {
-    System::RULE_CUBE
+pub fn cube() -> Rule {
+    CUBE_RULE.clone()
 }
 
-pub(super) fn cube_mesh() -> Mesh {
-    Mesh {
+lazy_static! {
+    static ref CUBE_RULE: Rule = Rule::new().push_mesh(Mesh {
         vertices: vec![
             vertex(-0.5, 0.5, 0.5),
             vertex(-0.5, -0.5, 0.5),
@@ -25,5 +26,5 @@ pub(super) fn cube_mesh() -> Mesh {
             vec![5, 6, 2, 1],
             vec![2, 6, 7, 3],
         ],
-    }
+    });
 }
