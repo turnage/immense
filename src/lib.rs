@@ -1,87 +1,141 @@
 //! immense describes 3D structures with L-Systems and outputs them as Wavefront Object files you
 //! can plug into your renderer of choice.
 //!
+//! # Intro
+//!
+//! We start with some builtin rules such as [cube][api::builtin::cube], and create structures by
+//! transforming and replicating those rules. Here's an example of how expressive this can be:
+//!
+//!```
+//! # use immense::*;
+//! Rule::new().push(vec![
+//!     Replicate::n(36, vec![Tf::rz(10.0), Tf::ty(0.1)]),
+//!     Replicate::n(36, vec![Tf::ry(10.0), Tf::tz(1.2)]),
+//!    ],
+//!    cube(),
+//!)
+//! # ;
+//!```
+//!
+//! ![](https://i.imgur.com/5ccKkpQ.png)
+//!
 //! # Basics
 //!
-//! There are some builtin rules for meshes such as `cube()`. We can build production rules from
-//! them to describe structures. For example:
+//! Let's start with a cube. You probably want to write your meshes to a file and watch them in a
+//! viewer with autoreload. [Meshlab](http://www.meshlab.net/) is a great viewer (and much more)
+//! that can reload your meshes when changed.
 //!
 //! ````
-//! cube()
+//! # use failure::{Error};
+//! # let _ = || -> Result<(), Error> {
+//! use immense::*;
+//! use std::fs::File;
+//!
+//! let rule = cube();
+//! let meshes = rule.generate();
+//! let mut output_file = File::create("my_mesh.obj")?;
+//! write_meshes(meshes, &mut output_file)?;
+//! # Ok(())
+//! # };
 //! ````
+//!
 //! ![](https://i.imgur.com/s68Kk0U.png)
 //!
+//! We can translate the cube with the `Tf::t*` family of functions which generate translate
+//! transforms. We'll apply [Tf::tx][api::transforms::Transform::tx] by creating our own rule and
+//! invoking the cube rule with a transform.
+//!
 //! ````
-//! cube().tf(Translate::x(3))
+//! # use immense::*;
+//! Rule::new().push(Tf::tx(3.0), cube())
+//! # ;
 //! ````
 //!
 //! ![](https://i.imgur.com/1nALK9q.png)
 //!
+//! We can replicate transforms with [Replicate][api::transforms::Replicate] which generates
+//! multiple invocations of a subrule, each with more applications of the same transform applied to
+//! it.
+//!
 //! ````
-//! cube().tf(Replicate::n(3, Translate::y(1.1)))
+//! # use immense::*;
+//! Rule::new().push(Replicate::n(3, Tf::ty(1.1)), cube())
+//! # ;
 //! ````
+//!
+//! Notice that our translation is 1.1 and that that is 0.1 more than the length of our cube. That's
+//! no coincidence! All the built in meshes are 1 in length so that you can use convenient
+//! measurements like this, even when deep in a transform stack.
 //!
 //! ![](https://i.imgur.com/xqufPmN.png)
 //!
 //! # Recursion
 //!
-//! Recursive structures are particularly convenient to represent.
+//! You can generate rules recursively with the api we've covered so far, but doing so would put
+//! your entire rule tree in memory at one time, which can become a problem. immense provides a
+//! trait, [ToRule][api::ToRule], so you can give it types that can instantiate rules when needed.
 //!
-//! ```
-//! fn recursive_tile(depth_budget: usize) -> Rule {
-//!    let rule = Rule::new()
-//!        .push(cube().tf(Translate::by(0.25, 0.25, 0.0)).tf(Scale::by(0.4)))
-//!        .push(
-//!            cube()
-//!                .tf(Translate::by(-0.25, -0.25, 0.0))
-//!                .tf(Scale::by(0.4)),
-//!        )
-//!        .push(
-//!            cube()
-//!                .tf(Translate::by(-0.25, 0.25, 0.0))
-//!                .tf(Scale::by(0.4)),
-//!        );
-//!    if depth_budget > 0 {
-//!        rule.push(
-//!            recursive_tile(depth_budget - 1)
-//!                .tf(Translate::by(0.25, -0.25, 0.0))
-//!                .tf(Scale::by(0.5)),
-//!        )
-//!   } else {
-//!        rule
-//!    }
-//!}
+//! ````
+//! # use immense::*;
+//! struct RecursiveTile {
+//!     depth_budget: usize,
+//! }
 //!
-//! ...
+//! impl ToRule for RecursiveTile {
+//!     fn to_rule(&self) -> Rule {
+//!         let rule = Rule::new()
+//!             .push(vec![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)], cube())
+//!             .push(vec![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)], cube())
+//!             .push(vec![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)], cube());
+//!         if self.depth_budget > 0 {
+//!             rule.push(
+//!                 vec![Tf::t(0.25, -0.25, 0.0), Tf::s(0.4)],
+//!                 RecursiveTile {
+//!                     depth_budget: self.depth_budget - 1,
+//!                 },
+//!             )
+//!         } else {
+//!             rule
+//!         }
+//!     }
+//! }
 //!
-//! recursive_tile(3)
-//! ```
+//! RecursiveTile {
+//!     depth_budget: 3
+//! }.to_rule()
+//! # ;
+//! ````
 //!
 //! ![](https://i.imgur.com/huqVLHE.png)
 //!
 //! # Randomness
 //!
-//! Rules can be constructed with randomness. To do this construction of the rule must be delayed
-//! to mesh generation so the random values are different for each invocation, since the number of
-//! invocations is not known until then. For needs like this we can make Rules and Subrules from
-//! any type implementing ```ToRule```.
+//! Using [ToRule][api::ToRule] to delay rule construction, we can sample some random values
+//! each time our type builds a rule.
 //!
 //! ````
-//! #[derive(Debug)] struct RandCube;
+//! # use immense::*;
+//! # use rand::*;
+//! struct RandCube;
 //!
-//! impl ToRule for RandCube {fn to_rule(&self) -> Rule {cube().tf(*thread_rng()
-//!    .choose(&[Translate::x(0.1), Translate::x(-0.1), Translate::x(0.2), Translate::x(-0.2),
-//!            ])
-//!            .unwrap())
-//!    }
-//!}
+//! impl ToRule for RandCube {
+//!     fn to_rule(&self) -> Rule {
+//!         Rule::new().push(
+//!             *thread_rng()
+//!                 .choose(&[Tf::tx(0.1), Tf::tx(-0.1), Tf::tx(0.2), Tf::tx(-0.2)])
+//!                 .unwrap(),
+//!             cube(),
+//!         )
+//!     }
+//! }
 //!
-//!...
-//!
-//! Rule::from(RandCube {}).tf(Replicate::n(4, Translate::y(1.0)))
-//!````
+//! Rule::new().push(Replicate::n(4, Tf::ty(1.0)), RandCube {})
+//! # ;
+//! ````
 //!
 //! ![](https://i.imgur.com/bSNc6jw.png)
+//!
+//!
 
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]

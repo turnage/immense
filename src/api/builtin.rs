@@ -1,4 +1,4 @@
-use crate::api::{Rule, RuleInternal};
+use crate::api::Rule;
 use crate::mesh::{vertex, Mesh};
 use lazy_static::lazy_static;
 

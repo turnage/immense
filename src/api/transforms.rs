@@ -1,5 +1,5 @@
-use crate::mesh::{vertex, Mesh, Vertex};
-use nalgebra::{Matrix3, Matrix4, Vector3};
+use crate::mesh::Mesh;
+use nalgebra::Matrix4;
 use std::iter;
 
 fn identity() -> Matrix4<f32> {

@@ -1,13 +1,24 @@
 use immense::*;
 use std::fs::File;
 
-fn grid2D(rows: usize, cols: usize) -> Rule {
-    Rule::new()
-        .push(cube())
-        .tf(Replicate::n(rows, Translate::y(1.1)))
-        .tf(Replicate::n(cols, Translate::x(1.1)))
+struct Grid2D {
+    rows: usize,
+    cols: usize,
+}
+
+impl ToRule for Grid2D {
+    fn to_rule(&self) -> Rule {
+        Rule::new().push(
+            vec![
+                Replicate::n(self.rows, Tf::ty(1.1)),
+                Replicate::n(self.cols, Tf::tx(1.1)),
+            ],
+            cube(),
+        )
+    }
 }
 fn main() {
     let mut output = File::create("grid2d.obj").expect("obj file");
-    generate(grid2D(10, 5), &mut output).expect("rendered scene");
+    let meshes = Grid2D { rows: 2, cols: 2 }.to_rule().generate();
+    write_meshes(meshes, &mut output).expect("rendered scene");
 }
