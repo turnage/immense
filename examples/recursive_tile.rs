@@ -27,5 +27,5 @@ impl ToRule for RecursiveTile {
 fn main() {
     let meshes = RecursiveTile { depth_budget: 4 }.to_rule().generate();
     let mut output = File::create("recursive_tile.obj").expect("obj file");
-    write_meshes(meshes, &mut output).expect("rendered scene");
+    write_meshes(ExportConfig::default(), meshes, &mut output).expect("rendered scene");
 }

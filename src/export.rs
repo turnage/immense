@@ -13,12 +13,41 @@ pub enum ExportError {
     },
 }
 
+/// A policy for grouping meshes in the object file. Use this to specify how you want to work with
+/// your meshes later. E.g. if you want to use Blender to procedurally material each mesh based on
+/// their location, you want [MeshGrouping::Individual][MeshGrouping::Individual], but if you want
+/// to print the mesh with a 3D printer, you want
+/// [MeshGrouping::AllTogether][MeshGrouping::AllTogether].
+#[derive(Copy, Clone, Debug)]
+pub enum MeshGrouping {
+    /// All meshes will be combined into one object.
+    AllTogether,
+    /// Each mesh will be its own object.
+    Individual,
+}
+
+/// The default is [MeshGrouping::AllTogether][MeshGrouping::AllTogether].
+impl Default for MeshGrouping {
+    fn default() -> MeshGrouping {
+        MeshGrouping::AllTogether
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct ExportConfig {
+    pub grouping: MeshGrouping,
+}
+
 pub fn render_obj(
+    config: ExportConfig,
     mesh: Mesh,
     vertex_offset: usize,
     mut sink: impl io::Write,
 ) -> Result<(), ExportError> {
-    write!(&mut sink, "g g{}\n", vertex_offset);
+    match config.grouping {
+        MeshGrouping::Individual => write!(&mut sink, "g g{}\n", vertex_offset)?,
+        _ => (),
+    };
     for vertex in &mesh.vertices {
         write!(&mut sink, "v {} {} {}\n", vertex.x, vertex.y, vertex.z)?;
     }

@@ -21,5 +21,5 @@ fn main() {
         .push(Replicate::n(4, Tf::ty(1.0)), RandCube {})
         .generate();
     let mut output = File::create("randtower.obj").expect("obj file");
-    write_meshes(meshes, &mut output).expect("rendered scene");
+    write_meshes(ExportConfig::default(), meshes, &mut output).expect("rendered scene");
 }

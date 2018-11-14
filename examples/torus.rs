@@ -12,5 +12,5 @@ fn main() {
         )
         .generate();
     let mut output = File::create("torus.obj").expect("obj file");
-    write_meshes(meshes, &mut output).expect("rendered scene");
+    write_meshes(ExportConfig::default(), meshes, &mut output).expect("rendered scene");
 }

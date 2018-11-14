@@ -34,7 +34,7 @@
 //! let rule = cube();
 //! let meshes = rule.generate();
 //! let mut output_file = File::create("my_mesh.obj")?;
-//! write_meshes(meshes, &mut output_file)?;
+//! write_meshes(ExportConfig::default(), meshes, &mut output_file)?;
 //! # Ok(())
 //! # };
 //! ````
@@ -149,15 +149,20 @@ mod mesh;
 
 pub use crate::api::*;
 pub use crate::error::Error;
+pub use crate::export::{ExportConfig, MeshGrouping};
 
 use crate::error::Result;
 use std::io;
 
-pub fn write_meshes(meshes: Vec<mesh::Mesh>, mut sink: impl io::Write) -> Result<()> {
+pub fn write_meshes(
+    config: ExportConfig,
+    meshes: Vec<mesh::Mesh>,
+    mut sink: impl io::Write,
+) -> Result<()> {
     let mut vertex_offset = 0;
     for mesh in meshes {
         let vertex_count = mesh.vertices.len();
-        export::render_obj(mesh, vertex_offset, &mut sink)?;
+        export::render_obj(config, mesh, vertex_offset, &mut sink)?;
         vertex_offset += vertex_count;
     }
     Ok(())

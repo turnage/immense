@@ -20,5 +20,5 @@ impl ToRule for Grid2D {
 fn main() {
     let mut output = File::create("grid2d.obj").expect("obj file");
     let meshes = Grid2D { rows: 2, cols: 2 }.to_rule().generate();
-    write_meshes(meshes, &mut output).expect("rendered scene");
+    write_meshes(ExportConfig::default(), meshes, &mut output).expect("rendered scene");
 }
