@@ -16,6 +16,7 @@ pub struct Rule {
 }
 
 impl Rule {
+    /// Returns a new rule that contains no subrules.
     pub fn new() -> Rule {
         Rule {
             invocations: vec![],
@@ -27,6 +28,7 @@ impl Rule {
         self
     }
 
+    /// Adds a subrule to the Rule.
     pub fn push(
         mut self,
         transforms: impl Into<TransformInput>,
@@ -54,6 +56,7 @@ impl Rule {
         self
     }
 
+    /// Iteratively expands the Rule's subrules until meshes are generated.
     pub fn generate(self) -> Vec<Mesh> {
         let root = RuleInternal::Invocations(Arc::new(self));
         let mut meshes: Vec<(Option<Transform>, Mesh)> = vec![];
@@ -88,6 +91,7 @@ impl Rule {
     }
 }
 
+/// A trait for types that can become rules.
 pub trait ToRule: Send + Sync {
     fn to_rule(&self) -> Rule;
 }

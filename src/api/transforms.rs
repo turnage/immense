@@ -11,6 +11,7 @@ fn identity() -> Matrix4<f32> {
     )
 }
 
+/// An ergonomic alias for [Transform][self::Transform].
 pub type Tf = Transform;
 
 #[derive(Copy, Clone, Debug)]
@@ -176,9 +177,10 @@ impl From<Vec<Replicate>> for TransformInput {
     }
 }
 
-/// Replicates a transform ```n``` times. The transforms will stack, so ```Replicate::n(2,
-/// Tf::x(1.0))``` on some rule will result in two invocations of the rule with
-/// ```Tf::x(1.0)``` and ```Tf::x(2.0)```.
+/// Replicates a transform n times.
+///
+/// The transforms will stack, so ```Replicate::n(2, Tf::x(1.0))``` on some rule will result in two
+/// invocations of the rule with ```Tf::x(1.0)``` and ```Tf::x(2.0)```.
 pub struct Replicate {
     n: usize,
     source: TransformInput,
@@ -212,9 +214,6 @@ impl Into<TransformInput> for Replicate {
     }
 }
 
-/// Translates a rule. This is of course affected by earlier transformations, so
-/// ```Translate::x(1.0)``` in a rule transformed by ```Scale::by(2.0)``` results in an absolute
-/// translation of 2. This is almost always what you want.
 #[derive(Default, Clone, Copy, Debug)]
 struct Translate;
 
@@ -239,7 +238,6 @@ impl Translate {
     }
 }
 
-/// Scales the rule and all following transformations.
 #[derive(Default, Clone, Copy, Debug)]
 struct Scale;
 
@@ -249,14 +247,12 @@ impl Scale {
     }
 
     pub fn by(x: f32, y: f32, z: f32) -> Matrix4<f32> {
-        //Translate::by(0.5, 0.5, 0.5)*
         Matrix4::new(
             x, 0.0, 0.0, 0.0, //
             0.0, y, 0.0, 0.0, //
             0.0, 0.0, z, 0.0, //
             0.0, 0.0, 0.0, 1.0,
         )
-        //* Translate::by(-0.5, -0.5, -0.5)
     }
 }
 
@@ -278,12 +274,12 @@ impl Rotate {
     #[rustfmt::skip]
     pub fn y(y: f32) -> Matrix4<f32> {
         let r = y.to_radians();
-        Matrix4::new(
+        Translate::by(0.5, 0.0, 0.5) * Matrix4::new(
                 r.cos(),  0.0, r.sin(), 0.0, //
                 0.0,      1.0, 0.0,     0.0, //
                 -r.sin(), 0.0, r.cos(), 0.0, //
                 0.0,      0.0, 0.0,     1.0
-            )
+            )* Translate::by(-0.5, 0.0, -0.5)
     }
 
     #[rustfmt::skip]

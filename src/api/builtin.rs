@@ -2,6 +2,7 @@ use crate::api::Rule;
 use crate::mesh::{vertex, Mesh};
 use lazy_static::lazy_static;
 
+/// A cube of size 1 whose center is at the origin.
 pub fn cube() -> Rule {
     CUBE_RULE.clone()
 }
