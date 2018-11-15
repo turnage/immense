@@ -31,15 +31,15 @@ impl Rule {
     /// Adds a subrule to the Rule.
     pub fn push(
         mut self,
-        transforms: impl Into<TransformInput>,
+        transforms: impl Into<TransformArgument>,
         rule: impl ToRule + 'static,
     ) -> Rule {
         match transforms.into() {
-            TransformInput::Single(transform) => {
+            TransformArgument::Single(transform) => {
                 self.invocations
                     .push((Some(transform), RuleInternal::Invocations(Arc::new(rule))));
             }
-            TransformInput::Many(transforms) if !transforms.is_empty() => {
+            TransformArgument::Many(transforms) if !transforms.is_empty() => {
                 let rule = Arc::new(rule);
                 self.invocations.append(
                     &mut transforms

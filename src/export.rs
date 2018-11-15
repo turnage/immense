@@ -13,11 +13,12 @@ pub enum ExportError {
     },
 }
 
-/// A policy for grouping meshes in the object file. Use this to specify how you want to work with
-/// your meshes later. E.g. if you want to use Blender to procedurally material each mesh based on
-/// their location, you want [MeshGrouping::Individual][MeshGrouping::Individual], but if you want
-/// to print the mesh with a 3D printer, you want
-/// [MeshGrouping::AllTogether][MeshGrouping::AllTogether].
+/// A policy for grouping meshes in the object file.
+///
+/// Use this to specify how you want to work with your meshes later. E.g. if you want to use Blender
+/// to procedurally material each mesh based on their location, you want
+/// [MeshGrouping::Individual][MeshGrouping::Individual], but if you want to print the mesh with a
+/// 3D printer, you want [MeshGrouping::AllTogether][MeshGrouping::AllTogether].
 #[derive(Copy, Clone, Debug)]
 pub enum MeshGrouping {
     /// All meshes will be combined into one object.
@@ -33,6 +34,7 @@ impl Default for MeshGrouping {
     }
 }
 
+/// Configuration for Wavefront object file output.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ExportConfig {
     pub grouping: MeshGrouping,

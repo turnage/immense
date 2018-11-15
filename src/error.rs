@@ -5,6 +5,7 @@ use std;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// immense Error type.
 #[auto_from]
 #[derive(Fail, Debug)]
 pub enum Error {

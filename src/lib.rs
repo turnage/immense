@@ -1,10 +1,7 @@
-//! immense describes 3D structures with L-Systems and outputs them as Wavefront Object files you
-//! can plug into your renderer of choice.
+//! immense describes 3D structures with simple composable rules and outputs them as Wavefront
+//! object files you can plug into your renderer of choice.
 //!
-//! # Intro
-//!
-//! We start with some builtin rules such as [cube][api::builtin::cube], and create structures by
-//! transforming and replicating those rules. Here's an example of how expressive this can be:
+//! # Demo
 //!
 //!```
 //! # use immense::*;
@@ -19,11 +16,31 @@
 //!
 //! ![](https://i.imgur.com/5ccKkpQ.png)
 //!
-//! # Basics
+//! # Table of Contents
+//!
+//! 1. [Intro](#intro)
+//! 2. [Composing Rules](#composing_rules)
+//!     1. [Recursion](#recursion)
+//!     2. [Randomness](#randomness)
+//! 3. [Color](#color)
+//!
+//! # Intro
+//!
+//! In immense, you create a [Rule][self::api::Rule] that describes your structure, which is
+//! ultimately composed of [meshes](https://en.wikipedia.org/wiki/Polygon_mesh). immense provides
+//! some builtin meshes, such as [cube][self::api::builtin::cube], and you can create your own rules
+//! by using these builtins which you'll see in the next section.
+//!
+//! After you've built your [Rule][self::api::Rule], you can export the meshes it expands to as a
+//! Wavefront object file for the next part of your workflow, whether that is rendering it in Blender,
+//! printing it in your 3D printer, or importing it into your game!
+//!
+//! # Composing Rules
 //!
 //! Let's start with a cube. You probably want to write your meshes to a file and watch them in a
 //! viewer with autoreload. [Meshlab](http://www.meshlab.net/) is a great viewer (and much more)
-//! that can reload your meshes when changed.
+//! that can reload your meshes when changed. Check out [ExportConfig][self::export::ExportConfig]
+//! to see what options you can set that will work best for your rendering or printing workflow.
 //!
 //! ````
 //! # use failure::{Error};
@@ -39,6 +56,7 @@
 //! # };
 //! ````
 //!
+//!
 //! ![](https://i.imgur.com/s68Kk0U.png)
 //!
 //! We can translate the cube with the `Tf::t*` family of functions which generate translate
@@ -47,8 +65,7 @@
 //!
 //! ````
 //! # use immense::*;
-//! Rule::new().push(Tf::tx(3.0), cube())
-//! # ;
+//! let rule = Rule::new().push(Tf::tx(3.0), cube());
 //! ````
 //!
 //! ![](https://i.imgur.com/1nALK9q.png)
@@ -59,8 +76,7 @@
 //!
 //! ````
 //! # use immense::*;
-//! Rule::new().push(Replicate::n(3, Tf::ty(1.1)), cube())
-//! # ;
+//! let rule = Rule::new().push(Replicate::n(3, Tf::ty(1.1)), cube());
 //! ````
 //!
 //! Notice that our translation is 1.1 and that that is 0.1 more than the length of our cube. That's
@@ -69,7 +85,7 @@
 //!
 //! ![](https://i.imgur.com/xqufPmN.png)
 //!
-//! # Recursion
+//! ## Recursion
 //!
 //! You can generate rules recursively with the api we've covered so far, but doing so would put
 //! your entire rule tree in memory at one time, which can become a problem. immense provides a
@@ -100,15 +116,14 @@
 //!     }
 //! }
 //!
-//! RecursiveTile {
+//! let rule = RecursiveTile {
 //!     depth_budget: 3
-//! }.to_rule()
-//! # ;
+//! }.to_rule();
 //! ````
 //!
 //! ![](https://i.imgur.com/huqVLHE.png)
 //!
-//! # Randomness
+//! ## Randomness
 //!
 //! Using [ToRule][api::ToRule] to delay rule construction, we can sample some random values
 //! each time our type builds a rule.
@@ -122,20 +137,21 @@
 //!     fn to_rule(&self) -> Rule {
 //!         Rule::new().push(
 //!             *thread_rng()
-//!                 .choose(&[Tf::tx(0.1), Tf::tx(-0.1), Tf::tx(0.2), Tf::tx(-0.2)])
+//!                 .choose(&[Tf::tx(0.1),
+//!                           Tf::tx(-0.1),
+//!                           Tf::tx(0.2),
+//!                           Tf::tx(-0.2)])
 //!                 .unwrap(),
 //!             cube(),
 //!         )
 //!     }
 //! }
 //!
-//! Rule::new().push(Replicate::n(4, Tf::ty(1.0)), RandCube {})
-//! # ;
+//! let rule = Rule::new().push(Replicate::n(4, Tf::ty(1.0)),
+//!                             RandCube {});
 //! ````
 //!
 //! ![](https://i.imgur.com/bSNc6jw.png)
-//!
-//!
 
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]
@@ -154,6 +170,7 @@ pub use crate::export::{ExportConfig, MeshGrouping};
 use crate::error::Result;
 use std::io;
 
+/// Writes out meshes as a Wavefront object file to the given [Write][io::Write] sink.
 pub fn write_meshes(
     config: ExportConfig,
     meshes: Vec<mesh::Mesh>,

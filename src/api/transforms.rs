@@ -14,6 +14,35 @@ fn identity() -> Matrix4<f32> {
 /// An ergonomic alias for [Transform][self::Transform].
 pub type Tf = Transform;
 
+/// A Transform, when applied, modifies a mesh. When applied to a rule, it transforms all the meshes that rule eventually expands to. Transforms may be translations, scales, rotations, etc.
+///
+/// It may be helpful to think of transforms to rules as transforming the space in which the rule or
+/// mesh is evaluated. For example this rule will translate a cube 4.0 on the x axis in our root
+/// frame of reference:
+///
+/// ````
+/// # use immense::*;
+/// let our_translated_cube = Rule::new().push(Tf::tx(4.0), cube());
+/// # ;
+/// ````
+///
+/// This rule will translate a cube -4.0 on the x axis in our root frame of reference:
+///
+/// ````
+/// # use immense::*;
+/// # let our_translated_cube = Rule::new().push(Tf::tx(4.0), cube());
+///let containing_rule = Rule::new().push(Tf::ry(180.0), our_translated_cube);
+/// # ;
+/// ````
+///
+/// This rule will translate a half-sized cube 2.0 on the x axis in our root frame of reference.
+///
+/// ````
+/// # use immense::*;
+/// # let our_translated_cube = Rule::new().push(Tf::tx(4.0), cube());
+/// let containing_rule = Rule::new().push(Tf::s(0.5), our_translated_cube)
+/// # ;
+/// ````
 #[derive(Copy, Clone, Debug)]
 pub struct Transform {
     spatial: Matrix4<f32>,
@@ -31,13 +60,7 @@ impl Transform {
         mesh.apply_matrix(self.spatial)
     }
 
-    pub fn tx(x: f32) -> Self {
-        Self {
-            spatial: Translate::x(x),
-            ..Self::default()
-        }
-    }
-
+    /// A translation on all axes.
     pub fn t(x: f32, y: f32, z: f32) -> Self {
         Self {
             spatial: Translate::by(x, y, z),
@@ -45,6 +68,15 @@ impl Transform {
         }
     }
 
+    /// A translation on the x axis.
+    pub fn tx(x: f32) -> Self {
+        Self {
+            spatial: Translate::x(x),
+            ..Self::default()
+        }
+    }
+
+    /// A translation on the y axis.
     pub fn ty(y: f32) -> Self {
         Self {
             spatial: Translate::y(y),
@@ -52,6 +84,7 @@ impl Transform {
         }
     }
 
+    /// A translation on the z axis.
     pub fn tz(z: f32) -> Self {
         Self {
             spatial: Translate::z(z),
@@ -59,6 +92,7 @@ impl Transform {
         }
     }
 
+    /// A uniform scale in all dimensions.
     pub fn s(factor: f32) -> Self {
         Self {
             spatial: Scale::all(factor),
@@ -66,6 +100,15 @@ impl Transform {
         }
     }
 
+    /// A scale in all dimensions.
+    pub fn sby(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            spatial: Scale::by(x, y, z),
+            ..Self::default()
+        }
+    }
+
+    /// A rotation about the x axis.
     pub fn rx(x: f32) -> Self {
         Self {
             spatial: Rotate::x(x),
@@ -73,6 +116,7 @@ impl Transform {
         }
     }
 
+    /// A rotation about the y axis.
     pub fn ry(y: f32) -> Self {
         Self {
             spatial: Rotate::y(y),
@@ -80,6 +124,7 @@ impl Transform {
         }
     }
 
+    /// A rotation about the z axis.
     pub fn rz(z: f32) -> Self {
         Self {
             spatial: Rotate::z(z),
@@ -118,53 +163,72 @@ impl Default for Transform {
     }
 }
 
+/// A TransformArgument is a transform that should be applied to the invocation of a
+/// [Rule][crate::api::Rule].
+///
+/// See the [From][std::convert::From] and [Into][std::convert::Into] implementations
+/// which produce this type to find out what kind of argument each type becomes.
 #[derive(Debug)]
-pub enum TransformInput {
+pub enum TransformArgument {
+    /// A single transform that corresponds to one invocation with the given transform.
     Single(Transform),
+    /// An arbitrary number of transforms (e.g. from [Replicate][self::Replicate]) that correspond
+    /// to one invocation each.
     Many(Vec<Transform>),
 }
 
-impl Into<Vec<Transform>> for TransformInput {
+impl Into<Vec<Transform>> for TransformArgument {
     fn into(self) -> Vec<Transform> {
         match self {
-            TransformInput::Single(transform) => vec![transform],
-            TransformInput::Many(transforms) => transforms,
+            TransformArgument::Single(transform) => vec![transform],
+            TransformArgument::Many(transforms) => transforms,
         }
     }
 }
 
-impl From<Transform> for TransformInput {
+/// A single transform will correspond to one invocation.
+impl From<Transform> for TransformArgument {
     fn from(transform: Transform) -> Self {
-        TransformInput::Single(transform)
+        TransformArgument::Single(transform)
     }
 }
 
-impl From<Vec<Transform>> for TransformInput {
+/// A vector of transforms will be sequentially composed into a single transform and correspond to
+/// one invocation.
+impl From<Vec<Transform>> for TransformArgument {
     fn from(transforms: Vec<Transform>) -> Self {
-        TransformInput::Single(Transform::coalesce(None, transforms.into_iter()))
+        TransformArgument::Single(Transform::coalesce(None, transforms.into_iter()))
     }
 }
 
-impl From<&[Transform]> for TransformInput {
+/// A slice of transforms will be sequentially composed into a single transform and correspond to
+/// one invocation.
+impl From<&[Transform]> for TransformArgument {
     fn from(transforms: &[Transform]) -> Self {
-        TransformInput::Single(Transform::coalesce(None, transforms.iter().map(|t| *t)))
+        TransformArgument::Single(Transform::coalesce(None, transforms.iter().map(|t| *t)))
     }
 }
 
-impl From<Option<Transform>> for TransformInput {
+/// An optional transform will of course correspond to one invocation. This implementation
+/// also allows you to pass [None][std::option::Option::None] to invoke rules unmodified.
+impl From<Option<Transform>> for TransformArgument {
     fn from(maybe_input: Option<Transform>) -> Self {
         match maybe_input {
             Some(input) => input.into(),
-            None => TransformInput::Many(vec![]),
+            None => TransformArgument::Many(vec![]),
         }
     }
 }
 
-impl From<Vec<Replicate>> for TransformInput {
-    fn from(replications: Vec<Replicate>) -> TransformInput {
+/// A vector of replications will be composed sequentially, which means the number of corresponding
+/// rule invocations is the product of each replication. A vector with a replication of transform A
+/// 36 times then replication of B 10 times will yield transforms for every sequence of A then B
+/// (e.g. (A_1, B_1), (A_1, B_2), ..., (A_36, B_36)), so 360 total.
+impl From<Vec<Replicate>> for TransformArgument {
+    fn from(replications: Vec<Replicate>) -> TransformArgument {
         let mut emitted = vec![];
         for replication in replications.into_iter().map(|r| -> Vec<Transform> {
-            let input: TransformInput = r.into();
+            let input: TransformArgument = r.into();
             input.into()
         }) {
             emitted = if emitted.is_empty() {
@@ -173,7 +237,7 @@ impl From<Vec<Replicate>> for TransformInput {
                 Transform::cross(emitted, replication)
             };
         }
-        TransformInput::Many(emitted)
+        TransformArgument::Many(emitted)
     }
 }
 
@@ -183,11 +247,11 @@ impl From<Vec<Replicate>> for TransformInput {
 /// invocations of the rule with ```Tf::x(1.0)``` and ```Tf::x(2.0)```.
 pub struct Replicate {
     n: usize,
-    source: TransformInput,
+    source: TransformArgument,
 }
 
 impl Replicate {
-    pub fn n(n: usize, source: impl Into<TransformInput>) -> Self {
+    pub fn n(n: usize, source: impl Into<TransformArgument>) -> Self {
         Self {
             n,
             source: source.into(),
@@ -195,13 +259,14 @@ impl Replicate {
     }
 }
 
-impl Into<TransformInput> for Replicate {
-    fn into(self) -> TransformInput {
+/// The replication will become ```n``` transforms, corresponding to one invocation each.
+impl Into<TransformArgument> for Replicate {
+    fn into(self) -> TransformArgument {
         match self.source {
-            TransformInput::Single(transform) => {
-                TransformInput::Many((0..self.n).map(|i| transform.stack(i)).collect())
+            TransformArgument::Single(transform) => {
+                TransformArgument::Many((0..self.n).map(|i| transform.stack(i)).collect())
             }
-            TransformInput::Many(transforms) => TransformInput::Many({
+            TransformArgument::Many(transforms) => TransformArgument::Many({
                 let mut emitted = vec![];
                 for transform in transforms {
                     for i in 0..self.n {
