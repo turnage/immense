@@ -1,6 +1,6 @@
 use crate::mesh::Vertex;
 use nalgebra::Matrix4;
-use palette::Hsv;
+use palette::{encoding::srgb::Srgb, rgb::Rgb, Hsv, RgbHue};
 use std::iter;
 
 fn identity() -> Matrix4<f32> {
@@ -57,6 +57,12 @@ enum ColorTransform {
     Delta(Hsv),
 }
 
+impl Default for ColorTransform {
+    fn default() -> ColorTransform {
+        ColorTransform::Delta(Hsv::new(0.0, 1.0, 1.0))
+    }
+}
+
 impl ColorTransform {
     fn cons(self, other: ColorTransform) -> Self {
         match (self, other) {
@@ -77,6 +83,20 @@ impl ColorTransform {
             }
         }
     }
+
+    fn color(self) -> Hsv {
+        match self {
+            ColorTransform::Override(color) => color,
+            ColorTransform::Delta(delta) => {
+                let color = Hsv::new(0.0, 1.0, 1.0);
+                Hsv::new(
+                    color.hue + delta.hue,
+                    color.saturation * delta.saturation,
+                    color.value * delta.value,
+                )
+            }
+        }
+    }
 }
 
 impl Transform {
@@ -90,6 +110,14 @@ impl Transform {
 
     pub(crate) fn apply_to(&self, vertex: Vertex) -> Vertex {
         self.spatial * vertex
+    }
+
+    pub(crate) fn get_color(&self) -> Rgb<Srgb, f32> {
+        Rgb::from(
+            ColorTransform::Override(Hsv::new(0.0, 1.0, 1.0))
+                .cons(self.color)
+                .color(),
+        )
     }
 
     /// A translation on all axes.
@@ -173,7 +201,7 @@ impl Transform {
     }
 
     /// Adds `delta` to the current color hue.
-    pub fn hue(delta: f32) -> Self {
+    pub fn hue(delta: impl Into<RgbHue<f32>>) -> Self {
         Self {
             color: ColorTransform::Delta(Hsv::new(delta, 1.0, 1.0)),
             ..Self::default()
@@ -223,7 +251,7 @@ impl Default for Transform {
     fn default() -> Self {
         Self {
             spatial: identity(),
-            color: ColorTransform::Override(Hsv::new(0.0, 1.0, 1.0)),
+            color: ColorTransform::default(),
         }
     }
 }

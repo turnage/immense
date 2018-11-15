@@ -152,6 +152,18 @@
 //! ````
 //!
 //! ![](https://i.imgur.com/bSNc6jw.png)
+//!
+//! # Color
+//!
+//! immense can export some colors alongside your mesh, by linking the object file output to an
+//! mtl file (material library). Set the output mtl file in
+//! [export_colors][crate::export::Export_config::export_colors] and immense will write out colors.
+//!
+//! You can specify colors overrides and transforms in HSV color space using Ogeon's [palette][palette].
+//! See [Tf::color][crate::api::transforms::Tf::color], [Tf::hue][crate::api::transforms::Tf::hue],
+//! [Tf::saturation][crate::api::transforms::Tf::saturation], [Tf::value][crate::api::transforms::Tf::value].
+//!
+//!
 
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]
@@ -167,6 +179,7 @@ mod mesh;
 pub use crate::api::*;
 pub use crate::error::Error;
 pub use crate::export::{ExportConfig, MeshGrouping};
+pub use palette::{Hsv, RgbHue};
 
 use crate::error::Result;
 use std::io;
@@ -175,13 +188,8 @@ use std::io;
 pub fn write_meshes(
     config: ExportConfig,
     meshes: impl Iterator<Item = OutputMesh>,
-    mut sink: impl io::Write,
+    sink: impl io::Write,
 ) -> Result<()> {
-    let mut vertex_offset = 0;
-    for mesh in meshes {
-        let vertex_count = mesh.mesh.vertices().len();
-        export::render_obj(config, mesh, vertex_offset, &mut sink)?;
-        vertex_offset += vertex_count;
-    }
+    export::write_meshes(config, meshes, sink)?;
     Ok(())
 }
