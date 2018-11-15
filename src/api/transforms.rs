@@ -1,5 +1,6 @@
 use crate::mesh::Mesh;
 use nalgebra::Matrix4;
+use palette::Hsv;
 use std::iter;
 
 fn identity() -> Matrix4<f32> {
@@ -14,7 +15,8 @@ fn identity() -> Matrix4<f32> {
 /// An ergonomic alias for [Transform][self::Transform].
 pub type Tf = Transform;
 
-/// A Transform, when applied, modifies a mesh. When applied to a rule, it transforms all the meshes that rule eventually expands to. Transforms may be translations, scales, rotations, etc.
+/// A Transform, when applied, modifies a mesh. When applied to a rule, it transforms all the meshes
+/// that rule eventually expands to. Transforms may be translations, scales, rotations, etc.
 ///
 /// It may be helpful to think of transforms to rules as transforming the space in which the rule or
 /// mesh is evaluated. For example this rule will translate a cube 4.0 on the x axis in our root
@@ -46,6 +48,35 @@ pub type Tf = Transform;
 #[derive(Copy, Clone, Debug)]
 pub struct Transform {
     spatial: Matrix4<f32>,
+    color: ColorTransform,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum ColorTransform {
+    Override(Hsv),
+    Delta(Hsv),
+}
+
+impl ColorTransform {
+    fn cons(self, other: ColorTransform) -> Self {
+        match (self, other) {
+            (_, ColorTransform::Override(color)) => ColorTransform::Override(color),
+            (ColorTransform::Override(color), ColorTransform::Delta(delta)) => {
+                ColorTransform::Override(Hsv::new(
+                    color.hue + delta.hue,
+                    color.saturation * delta.saturation,
+                    color.value * delta.value,
+                ))
+            }
+            (ColorTransform::Delta(delta_a), ColorTransform::Delta(delta_b)) => {
+                ColorTransform::Delta(Hsv::new(
+                    delta_a.hue + delta_b.hue,
+                    delta_a.saturation * delta_b.saturation,
+                    delta_a.value * delta_b.value,
+                ))
+            }
+        }
+    }
 }
 
 impl Transform {
@@ -53,6 +84,7 @@ impl Transform {
         // TODO: determine when translation to origin is necessary if ever.
         Transform {
             spatial: self.spatial * other.spatial,
+            color: self.color.cons(other.color),
         }
     }
 
@@ -132,6 +164,38 @@ impl Transform {
         }
     }
 
+    /// A color override that takes precedence over colors set higher in the rule tree.
+    pub fn color(color: Hsv) -> Self {
+        Self {
+            color: ColorTransform::Override(color),
+            ..Self::default()
+        }
+    }
+
+    /// Adds `delta` to the current color hue.
+    pub fn hue(delta: f32) -> Self {
+        Self {
+            color: ColorTransform::Delta(Hsv::new(delta, 1.0, 1.0)),
+            ..Self::default()
+        }
+    }
+
+    /// Multiplies the current color saturation by `factor`
+    pub fn saturation(factor: f32) -> Self {
+        Self {
+            color: ColorTransform::Delta(Hsv::new(0.0, factor, 1.0)),
+            ..Self::default()
+        }
+    }
+
+    /// Multiplies the current color value by `factor`.
+    pub fn value(factor: f32) -> Self {
+        Self {
+            color: ColorTransform::Delta(Hsv::new(0.0, 1.0, factor)),
+            ..Self::default()
+        }
+    }
+
     // Multiplicatively branch transforms.
     fn cross(parents: Vec<Transform>, children: Vec<Transform>) -> Vec<Transform> {
         let mut emitted = vec![];
@@ -159,6 +223,7 @@ impl Default for Transform {
     fn default() -> Self {
         Self {
             spatial: identity(),
+            color: ColorTransform::Override(Hsv::new(0.0, 1.0, 1.0)),
         }
     }
 }
