@@ -58,7 +58,7 @@ impl Rule {
     /// Returns an iterator expands the Rule's subrules, outputting the meshes it generates until
     /// all rules have been fully expanded. As an iterator the meshes are computed lazily so you can
     /// use this method and terminate with [take][std::iter::Iterator::take], or
-    /// [until][std::iter::Iterator::until], etc if your rule tree is infinite.
+    /// [until][std::iter::Iterator::take_while], etc if your rule tree is infinite.
     pub fn generate(self) -> impl Iterator<Item = OutputMesh> {
         let root = RuleInternal::Invocations(Arc::new(self));
         MeshIter::new(vec![(None, root)])

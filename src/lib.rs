@@ -6,15 +6,16 @@
 //!```
 //! # use immense::*;
 //! Rule::new().push(vec![
+//!     Replicate::n(1, vec![Tf::saturation(0.8), Tf::hue(160.0)]),
 //!     Replicate::n(36, vec![Tf::rz(10.0), Tf::ty(0.1)]),
-//!     Replicate::n(36, vec![Tf::ry(10.0), Tf::tz(1.2)]),
+//!     Replicate::n(36, vec![Tf::ry(10.0), Tf::tz(1.2), Tf::hue(3.4)]),
 //!    ],
 //!    cube(),
 //!)
 //! # ;
 //!```
 //!
-//! ![](https://i.imgur.com/5ccKkpQ.png)
+//! ![](https://i.imgur.com/1Emik4Z.png)
 //!
 //! # Table of Contents
 //!
@@ -157,11 +158,11 @@
 //!
 //! immense can export some colors alongside your mesh, by linking the object file output to an
 //! mtl file (material library). Set the output mtl file in
-//! [export_colors][crate::export::Export_config::export_colors] and immense will write out colors.
+//! [export_colors][crate::export::ExportConfig::export_colors] and immense will write out colors.
 //!
 //! You can specify colors overrides and transforms in HSV color space using Ogeon's [palette][palette].
-//! See [Tf::color][crate::api::transforms::Tf::color], [Tf::hue][crate::api::transforms::Tf::hue],
-//! [Tf::saturation][crate::api::transforms::Tf::saturation], [Tf::value][crate::api::transforms::Tf::value].
+//! See [Tf::color][crate::api::transforms::Transform::color], [Tf::hue][crate::api::transforms::Transform::hue],
+//! [Tf::saturation][crate::api::transforms::Transform::saturation], [Tf::value][crate::api::transforms::Transform::value].
 //!
 //!
 
