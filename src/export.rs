@@ -1,5 +1,5 @@
 use auto_from::auto_from;
-use crate::mesh::Mesh;
+use crate::api::OutputMesh;
 use failure_derive::Fail;
 use std::io;
 
@@ -42,20 +42,25 @@ pub struct ExportConfig {
 
 pub fn render_obj(
     config: ExportConfig,
-    mesh: Mesh,
+    output_mesh: OutputMesh,
     vertex_offset: usize,
     mut sink: impl io::Write,
 ) -> Result<(), ExportError> {
+    let OutputMesh { transform, mesh } = output_mesh;
     match config.grouping {
         MeshGrouping::Individual => write!(&mut sink, "g g{}\n", vertex_offset)?,
         _ => (),
     };
-    for vertex in &mesh.vertices {
+    for vertex in mesh
+        .vertices()
+        .iter()
+        .map(|v| transform.map(|t| t.apply_to(*v)).unwrap_or(*v))
+    {
         write!(&mut sink, "v {} {} {}\n", vertex.x, vertex.y, vertex.z)?;
     }
-    for face in &mesh.faces {
+    for face in mesh.faces() {
         write!(&mut sink, "f ")?;
-        for vertex_index in face {
+        for vertex_index in *face {
             write!(&mut sink, " {}", vertex_index + vertex_offset)?;
         }
         write!(&mut sink, "\n")?;

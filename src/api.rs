@@ -6,7 +6,6 @@ pub use self::transforms::*;
 
 use auto_from::auto_from;
 use crate::mesh::Mesh;
-use rayon::prelude::*;
 use std::sync::Arc;
 
 /// A composition of subrules to expand until meshes are generated.
@@ -56,19 +55,46 @@ impl Rule {
         self
     }
 
-    /// Iteratively expands the Rule's subrules until meshes are generated.
-    pub fn generate(self) -> Vec<Mesh> {
+    /// Returns an iterator expands the Rule's subrules, outputting the meshes it generates until
+    /// all rules have been fully expanded. As an iterator the meshes are computed lazily so you can
+    /// use this method and terminate with [take][std::iter::Iterator::take], or
+    /// [until][std::iter::Iterator::until], etc if your rule tree is infinite.
+    pub fn generate(self) -> impl Iterator<Item = OutputMesh> {
         let root = RuleInternal::Invocations(Arc::new(self));
-        let mut meshes: Vec<(Option<Transform>, Mesh)> = vec![];
-        let mut rules: Vec<(Option<Transform>, RuleInternal)> = vec![(None, root)];
-        while let Some((transform, rule)) = rules.pop() {
+        MeshIter::new(vec![(None, root)])
+    }
+}
+
+/// An iterator that iterates over a [Rule][self::Rule]'s generated meshes.
+pub struct MeshIter {
+    rules: Vec<(Option<Transform>, RuleInternal)>,
+}
+
+impl MeshIter {
+    fn new(rules: Vec<(Option<Transform>, RuleInternal)>) -> Self {
+        Self { rules }
+    }
+}
+
+/// An OutputMesh can be written out in an object file.
+#[derive(Debug)]
+pub struct OutputMesh {
+    pub transform: Option<Transform>,
+    pub mesh: Mesh,
+}
+
+impl Iterator for MeshIter {
+    type Item = OutputMesh;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((transform, rule)) = self.rules.pop() {
             match rule {
-                RuleInternal::Mesh(mesh) => meshes.push((transform, mesh.clone())),
+                RuleInternal::Mesh(mesh) => return Some(OutputMesh { transform, mesh }),
                 RuleInternal::Invocations(composite_rule) => {
                     let composite_rule = composite_rule.to_rule();
-                    rules.reserve(composite_rule.invocations.len());
+                    self.rules.reserve(composite_rule.invocations.len());
                     for (sub_transform, sub_rule) in composite_rule.invocations {
-                        rules.push((
+                        self.rules.push((
                             match (transform, sub_transform) {
                                 (None, None) => None,
                                 (Some(parent), None) => Some(parent),
@@ -81,13 +107,7 @@ impl Rule {
                 }
             }
         }
-        meshes
-            .into_par_iter()
-            .map(|(transform, mesh)| match transform {
-                Some(transform) => transform.apply_to(mesh),
-                None => mesh,
-            })
-            .collect()
+        None
     }
 }
 

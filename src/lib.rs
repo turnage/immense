@@ -157,6 +157,7 @@
 #![feature(bind_by_move_pattern_guards)]
 #![feature(stmt_expr_attributes)]
 #![feature(const_fn)]
+#![feature(fixed_size_array)]
 
 mod api;
 mod error;
@@ -173,12 +174,12 @@ use std::io;
 /// Writes out meshes as a Wavefront object file to the given [Write][io::Write] sink.
 pub fn write_meshes(
     config: ExportConfig,
-    meshes: Vec<mesh::Mesh>,
+    meshes: impl Iterator<Item = OutputMesh>,
     mut sink: impl io::Write,
 ) -> Result<()> {
     let mut vertex_offset = 0;
     for mesh in meshes {
-        let vertex_count = mesh.vertices.len();
+        let vertex_count = mesh.mesh.vertices().len();
         export::render_obj(config, mesh, vertex_offset, &mut sink)?;
         vertex_offset += vertex_count;
     }

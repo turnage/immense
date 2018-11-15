@@ -1,4 +1,4 @@
-use crate::mesh::Mesh;
+use crate::mesh::Vertex;
 use nalgebra::Matrix4;
 use palette::Hsv;
 use std::iter;
@@ -88,8 +88,8 @@ impl Transform {
         }
     }
 
-    pub(crate) fn apply_to(&self, mesh: Mesh) -> Mesh {
-        mesh.apply_matrix(self.spatial)
+    pub(crate) fn apply_to(&self, vertex: Vertex) -> Vertex {
+        self.spatial * vertex
     }
 
     /// A translation on all axes.
