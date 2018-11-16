@@ -7,7 +7,7 @@ pub use self::transforms::*;
 use auto_from::auto_from;
 use crate::mesh::{Mesh, PrimitiveMesh, Vertex};
 use palette::rgb::Rgb;
-use std::sync::Arc;
+use std::rc::Rc;
 
 /// A composition of subrules to expand until meshes are generated.
 #[derive(Clone)]
@@ -23,10 +23,18 @@ impl Rule {
         }
     }
 
-    pub(crate) fn primitive(mut self, mesh: PrimitiveMesh) -> Self {
-        self.invocations
-            .push((None, RuleInternal::PrimitiveMesh(mesh)));
-        self
+    pub(crate) fn primitive(mesh: PrimitiveMesh) -> Self {
+        let mut rule = Rule::new();
+        rule.invocations
+            .push((None, RuleInternal::Mesh(OutputMeshSource::Primitive(mesh))));
+        rule
+    }
+
+    pub(crate) fn mesh(mesh: Rc<Mesh>) -> Self {
+        let mut rule = Rule::new();
+        rule.invocations
+            .push((None, RuleInternal::Mesh(OutputMeshSource::Dynamic(mesh))));
+        rule
     }
 
     /// Adds a subrule to the Rule.
@@ -38,10 +46,10 @@ impl Rule {
         match transforms.into() {
             TransformArgument::Single(transform) => {
                 self.invocations
-                    .push((Some(transform), RuleInternal::Invocations(Arc::new(rule))));
+                    .push((Some(transform), RuleInternal::Invocations(Rc::new(rule))));
             }
             TransformArgument::Many(transforms) if !transforms.is_empty() => {
-                let rule = Arc::new(rule);
+                let rule = Rc::new(rule);
                 self.invocations.append(
                     &mut transforms
                         .into_iter()
@@ -52,7 +60,7 @@ impl Rule {
 
             _ => self
                 .invocations
-                .push((None, RuleInternal::Invocations(Arc::new(rule)))),
+                .push((None, RuleInternal::Invocations(Rc::new(rule)))),
         };
         self
     }
@@ -62,17 +70,17 @@ impl Rule {
     /// use this method and terminate with [take][std::iter::Iterator::take], or
     /// [until][std::iter::Iterator::take_while], etc if your rule tree is infinite.
     pub fn generate(self) -> impl Iterator<Item = OutputMesh> {
-        let root = RuleInternal::Invocations(Arc::new(self));
-        PrimitiveMeshIter::new(vec![(None, root)])
+        let root = RuleInternal::Invocations(Rc::new(self));
+        MeshIter::new(vec![(None, root)])
     }
 }
 
 /// An iterator that iterates over a [Rule][self::Rule]'s generated meshes.
-pub struct PrimitiveMeshIter {
+pub struct MeshIter {
     rules: Vec<(Option<Transform>, RuleInternal)>,
 }
 
-impl PrimitiveMeshIter {
+impl MeshIter {
     fn new(rules: Vec<(Option<Transform>, RuleInternal)>) -> Self {
         Self { rules }
     }
@@ -85,9 +93,10 @@ pub struct OutputMesh {
     source: OutputMeshSource,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum OutputMeshSource {
     Primitive(PrimitiveMesh),
+    Dynamic(Rc<Mesh>),
 }
 
 impl OutputMesh {
@@ -122,20 +131,21 @@ impl OutputMesh {
     pub(crate) fn mesh<'a>(&'a self) -> &'a Mesh {
         match self.source {
             OutputMeshSource::Primitive(ref primitive) => primitive.mesh(),
+            OutputMeshSource::Dynamic(ref mesh) => mesh.as_ref(),
         }
     }
 }
 
-impl Iterator for PrimitiveMeshIter {
+impl Iterator for MeshIter {
     type Item = OutputMesh;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((transform, rule)) = self.rules.pop() {
             match rule {
-                RuleInternal::PrimitiveMesh(mesh) => {
+                RuleInternal::Mesh(mesh) => {
                     return Some(OutputMesh {
                         transform,
-                        source: OutputMeshSource::Primitive(mesh),
+                        source: mesh,
                     })
                 }
                 RuleInternal::Invocations(composite_rule) => {
@@ -160,7 +170,7 @@ impl Iterator for PrimitiveMeshIter {
 }
 
 /// A trait for types that can become rules.
-pub trait ToRule: Send + Sync {
+pub trait ToRule {
     fn to_rule(&self) -> Rule;
 }
 
@@ -170,9 +180,15 @@ impl ToRule for Rule {
     }
 }
 
+impl ToRule for Rc<Mesh> {
+    fn to_rule(&self) -> Rule {
+        Rule::mesh(self.clone())
+    }
+}
+
 #[auto_from]
 #[derive(Clone)]
 enum RuleInternal {
-    PrimitiveMesh(PrimitiveMesh),
-    Invocations(Arc<ToRule>),
+    Mesh(OutputMeshSource),
+    Invocations(Rc<ToRule>),
 }

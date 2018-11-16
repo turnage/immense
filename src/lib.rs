@@ -24,6 +24,7 @@
 //!     1. [Recursion](#recursion)
 //!     2. [Randomness](#randomness)
 //! 3. [Color](#color)
+//! 4. [Custom Meshes](#custom-meshes)
 //!
 //! # Intro
 //!
@@ -164,7 +165,23 @@
 //! See [Tf::color][crate::api::transforms::Transform::color], [Tf::hue][crate::api::transforms::Transform::hue],
 //! [Tf::saturation][crate::api::transforms::Transform::saturation], [Tf::value][crate::api::transforms::Transform::value].
 //!
+//! # Custom Meshes
 //!
+//! You can create meshes on your own and use them as rules by calling
+//! [Mesh::from][self::mesh::Mesh::from] if you format your meshes according to object file format.
+//!
+//! Meshes can be expensive to allocate. immense handles the primitives on your behalf, but if you
+//! introduce your own meshes you must be careful not to allocate them more than once. One million
+//! references to a sphere are fine, one million spheres will probably kill the process.
+//!
+//! An example is the sphere builtin which allows you to create a potentially expensive sphere estimation:
+//!
+//! ````
+//! # use immense::*;
+//! # use std::rc::Rc;
+//! let sphere: Rc<Mesh> = sphere(/*resolution=*/4);
+//! let rule = Rule::new().push(Tf::s(2.0), sphere);
+//! ````
 
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]
@@ -180,6 +197,7 @@ mod mesh;
 pub use crate::api::*;
 pub use crate::error::Error;
 pub use crate::export::{ExportConfig, MeshGrouping};
+pub use crate::mesh::{vertex, Mesh, Vertex};
 pub use palette::{Hsv, RgbHue};
 
 use crate::error::Result;
