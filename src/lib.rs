@@ -207,9 +207,6 @@
 
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]
-#![feature(stmt_expr_attributes)]
-#![feature(const_fn)]
-#![feature(fixed_size_array)]
 
 mod api;
 mod error;
