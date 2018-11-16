@@ -5,7 +5,8 @@ pub use self::builtin::*;
 pub use self::transforms::*;
 
 use auto_from::auto_from;
-use crate::mesh::Mesh;
+use crate::mesh::{Mesh, PrimitiveMesh, Vertex};
+use palette::rgb::Rgb;
 use std::sync::Arc;
 
 /// A composition of subrules to expand until meshes are generated.
@@ -22,8 +23,9 @@ impl Rule {
         }
     }
 
-    pub(crate) fn push_mesh(mut self, mesh: Mesh) -> Self {
-        self.invocations.push((None, RuleInternal::Mesh(mesh)));
+    pub(crate) fn primitive(mut self, mesh: PrimitiveMesh) -> Self {
+        self.invocations
+            .push((None, RuleInternal::PrimitiveMesh(mesh)));
         self
     }
 
@@ -61,16 +63,16 @@ impl Rule {
     /// [until][std::iter::Iterator::take_while], etc if your rule tree is infinite.
     pub fn generate(self) -> impl Iterator<Item = OutputMesh> {
         let root = RuleInternal::Invocations(Arc::new(self));
-        MeshIter::new(vec![(None, root)])
+        PrimitiveMeshIter::new(vec![(None, root)])
     }
 }
 
 /// An iterator that iterates over a [Rule][self::Rule]'s generated meshes.
-pub struct MeshIter {
+pub struct PrimitiveMeshIter {
     rules: Vec<(Option<Transform>, RuleInternal)>,
 }
 
-impl MeshIter {
+impl PrimitiveMeshIter {
     fn new(rules: Vec<(Option<Transform>, RuleInternal)>) -> Self {
         Self { rules }
     }
@@ -79,17 +81,63 @@ impl MeshIter {
 /// An OutputMesh can be written out in an object file.
 #[derive(Debug)]
 pub struct OutputMesh {
-    pub transform: Option<Transform>,
-    pub mesh: Mesh,
+    transform: Option<Transform>,
+    source: OutputMeshSource,
 }
 
-impl Iterator for MeshIter {
+#[derive(Debug)]
+enum OutputMeshSource {
+    Primitive(PrimitiveMesh),
+}
+
+impl OutputMesh {
+    pub(crate) fn color(&self) -> Rgb {
+        self.transform.unwrap_or(Transform::default()).get_color()
+    }
+
+    pub(crate) fn vertices<'a>(&'a self) -> Box<Iterator<Item = Vertex> + 'a> {
+        Box::new(
+            self.mesh()
+                .vertices()
+                .iter()
+                .map(move |v: &'a Vertex| -> Vertex {
+                    self.transform.map(|t| t.apply_to(*v)).unwrap_or(*v)
+                }),
+        )
+    }
+
+    pub(crate) fn normals<'a>(&'a self) -> Option<Box<Iterator<Item = Vertex> + 'a>> {
+        match self.mesh().normals() {
+            Some(ref normals) => Some(Box::new(normals.iter().map(move |v: &Vertex| -> Vertex {
+                self.transform.map(|t| t.apply_to(*v)).unwrap_or(*v)
+            }))),
+            None => None,
+        }
+    }
+
+    pub(crate) fn faces<'a>(&'a self) -> impl Iterator<Item = &'a [usize]> {
+        self.mesh().faces()
+    }
+
+    pub(crate) fn mesh<'a>(&'a self) -> &'a Mesh {
+        match self.source {
+            OutputMeshSource::Primitive(ref primitive) => primitive.mesh(),
+        }
+    }
+}
+
+impl Iterator for PrimitiveMeshIter {
     type Item = OutputMesh;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((transform, rule)) = self.rules.pop() {
             match rule {
-                RuleInternal::Mesh(mesh) => return Some(OutputMesh { transform, mesh }),
+                RuleInternal::PrimitiveMesh(mesh) => {
+                    return Some(OutputMesh {
+                        transform,
+                        source: OutputMeshSource::Primitive(mesh),
+                    })
+                }
                 RuleInternal::Invocations(composite_rule) => {
                     let composite_rule = composite_rule.to_rule();
                     self.rules.reserve(composite_rule.invocations.len());
@@ -125,6 +173,6 @@ impl ToRule for Rule {
 #[auto_from]
 #[derive(Clone)]
 enum RuleInternal {
-    Mesh(Mesh),
+    PrimitiveMesh(PrimitiveMesh),
     Invocations(Arc<ToRule>),
 }

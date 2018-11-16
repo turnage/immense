@@ -1,4 +1,4 @@
-use crate::api::{OutputMesh, Transform};
+use crate::api::OutputMesh;
 use failure_derive::Fail;
 use std::fs::File;
 use std::io;
@@ -15,6 +15,30 @@ pub enum ExportError {
         #[cause]
         write_error: io::Error,
     },
+}
+
+macro_rules! try_write_obj {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return Err(ExportError::ObjWriteError { write_error: err }),
+        }
+    };
+    ($expr:expr,) => {
+        try!($expr)
+    };
+}
+
+macro_rules! try_write_mtl {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return Err(ExportError::MtlWriteError { write_error: err }),
+        }
+    };
+    ($expr:expr,) => {
+        try!($expr)
+    };
 }
 
 /// A policy for grouping meshes in the object file.
@@ -59,18 +83,26 @@ pub fn write_meshes(
     mut sink: impl io::Write,
 ) -> Result<(), ExportError> {
     let mut mtl_file = if let Some(ref mtl_filename) = config.export_colors {
-        let mtl_file = File::create(mtl_filename)
-            .map_err(|write_error| ExportError::MtlWriteError { write_error })?;
-        write!(&mut sink, "mtllib {}\n", mtl_filename)
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
+        let mtl_file = try_write_mtl!(File::create(mtl_filename));
+        try_write_obj!(write!(&mut sink, "mtllib {}\n", mtl_filename));
         Some(mtl_file)
     } else {
         None
     };
     let mut vertex_offset = 0;
+    let mut normal_offset = 0;
     for mesh in meshes {
-        let vertex_count = mesh.mesh.vertices().len();
-        render_obj(&config, mesh, vertex_offset, &mut sink, mtl_file.as_mut())?;
+        let vertex_count = mesh.mesh().vertices().len();
+        let normal_count = mesh.mesh().normals().map(|ns| ns.len()).unwrap_or(0);
+        render_obj(
+            &config,
+            mesh,
+            vertex_offset,
+            normal_offset,
+            &mut sink,
+            mtl_file.as_mut(),
+        )?;
+        normal_offset += normal_count;
         vertex_offset += vertex_count;
     }
     Ok(())
@@ -80,46 +112,63 @@ fn render_obj(
     config: &ExportConfig,
     output_mesh: OutputMesh,
     vertex_offset: usize,
+    normal_offset: usize,
     mut sink: impl io::Write,
     material_sink: Option<impl io::Write>,
 ) -> Result<(), ExportError> {
-    let OutputMesh { transform, mesh } = output_mesh;
-    let color = transform.unwrap_or(Transform::default()).get_color();
+    let color = output_mesh.color();
     let color_hex = format!("#{:x}", color.into_format::<u8>());
     match config.grouping {
-        MeshGrouping::Individual => write!(&mut sink, "g g{}\n", vertex_offset)
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?,
-        MeshGrouping::ByColor => write!(&mut sink, "g {}\n", color_hex)
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?,
+        MeshGrouping::Individual => try_write_obj!(write!(&mut sink, "g g{}\n", vertex_offset)),
+        MeshGrouping::ByColor => try_write_obj!(write!(&mut sink, "g {}\n", color_hex)),
         _ => (),
     };
     if let Some(mut material_sink) = material_sink {
-        write!(&mut sink, "usemtl {}\n", color_hex)
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
-        write!(
+        try_write_obj!(write!(&mut sink, "usemtl {}\n", color_hex));
+        try_write_mtl!(write!(
             &mut material_sink,
             "newmtl {}\nKd {} {} {}\nillum 0\n",
             color_hex, color.red, color.green, color.blue
-        )
-        .map_err(|write_error| ExportError::MtlWriteError { write_error })?;
+        ));
     }
-    for vertex in mesh
-        .vertices()
-        .iter()
-        .map(|v| transform.map(|t| t.apply_to(*v)).unwrap_or(*v))
-    {
-        write!(&mut sink, "v {} {} {}\n", vertex.x, vertex.y, vertex.z)
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
+    for vertex in output_mesh.vertices() {
+        try_write_obj!(write!(
+            &mut sink,
+            "v {} {} {}\n",
+            vertex.x, vertex.y, vertex.z
+        ));
     }
-    for face in mesh.faces() {
-        write!(&mut sink, "f ")
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
-        for vertex_index in *face {
-            write!(&mut sink, " {}", vertex_index + vertex_offset)
-                .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
+
+    if let Some(normals) = output_mesh.normals() {
+        for normal in normals {
+            try_write_obj!(write!(
+                &mut sink,
+                "vn {} {} {}\n",
+                normal.x, normal.y, normal.z
+            ));
         }
-        write!(&mut sink, "\n")
-            .map_err(|write_error| ExportError::ObjWriteError { write_error })?;
+    }
+
+    let write_face_vertex = |sink: &mut io::Write, vertex_index| -> Result<(), ExportError> {
+        if let Some(_) = output_mesh.normals() {
+            try_write_mtl!(write!(
+                sink,
+                " {}//{}",
+                vertex_index + vertex_offset,
+                vertex_index + normal_offset
+            ));
+        } else {
+            try_write_mtl!(write!(sink, " {}", vertex_index + vertex_offset));
+        };
+        Ok(())
+    };
+
+    for face in output_mesh.faces() {
+        try_write_obj!(write!(&mut sink, "f "));
+        for vertex_index in face {
+            write_face_vertex(&mut sink, vertex_index)?;
+        }
+        try_write_obj!(write!(&mut sink, "\n"));
     }
     Ok(())
 }

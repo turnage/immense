@@ -8,9 +8,9 @@ struct RecursiveTile {
 impl ToRule for RecursiveTile {
     fn to_rule(&self) -> Rule {
         let rule = Rule::new()
-            .push(vec![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)], cube())
-            .push(vec![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)], cube())
-            .push(vec![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)], cube());
+            .push(vec![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)], icosphere())
+            .push(vec![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)], icosphere())
+            .push(vec![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)], icosphere());
         if self.depth_budget > 0 {
             rule.push(
                 vec![Tf::t(0.25, -0.25, 0.0), Tf::s(0.4)],
@@ -25,7 +25,10 @@ impl ToRule for RecursiveTile {
 }
 
 fn main() {
-    let meshes = RecursiveTile { depth_budget: 4 }.to_rule().generate();
+    let meshes = Rule::new()
+        .push(None, icosphere())
+        .push(Tf::tx(1.0), cube())
+        .generate(); //RecursiveTile { depth_budget: 3 }.to_rule().generate();
     let mut output = File::create("recursive_tile.obj").expect("obj file");
     write_meshes(ExportConfig::default(), meshes, &mut output).expect("rendered scene");
 }
