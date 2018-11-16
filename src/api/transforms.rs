@@ -270,6 +270,16 @@ pub enum TransformArgument {
     Many(Vec<Transform>),
 }
 
+/// An ergonomics macro for listing transforms that will apply in order and branch on replications.
+#[macro_export]
+macro_rules! tf {
+    ($($transform:expr),+ $(,)*) => ({
+        let mut args: Vec<TransformArgument> = vec![];
+        $(args.push($transform.into());)*
+        args
+    });
+}
+
 impl Into<Vec<Transform>> for TransformArgument {
     fn into(self) -> Vec<Transform> {
         match self {
@@ -299,6 +309,16 @@ impl From<Vec<Transform>> for TransformArgument {
 impl From<&[Transform]> for TransformArgument {
     fn from(transforms: &[Transform]) -> Self {
         TransformArgument::Single(Transform::coalesce(None, transforms.iter().map(|t| *t)))
+    }
+}
+
+impl From<Vec<TransformArgument>> for TransformArgument {
+    fn from(args: Vec<TransformArgument>) -> Self {
+        let mut emitted = vec![Transform::default()];
+        for arg in args {
+            emitted = Transform::cross(emitted, arg.into());
+        }
+        TransformArgument::Many(emitted)
     }
 }
 

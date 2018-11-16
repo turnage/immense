@@ -24,7 +24,8 @@
 //!     1. [Recursion](#recursion)
 //!     2. [Randomness](#randomness)
 //! 3. [Color](#color)
-//! 4. [Custom Meshes](#custom-meshes)
+//! 4. [Ergonomics Macros](#ergonomics-macros)
+//! 5. [Custom Meshes](#custom-meshes)
 //!
 //! # Intro
 //!
@@ -164,6 +165,27 @@
 //! You can specify colors overrides and transforms in HSV color space using Ogeon's [palette][palette].
 //! See [Tf::color][crate::api::transforms::Transform::color], [Tf::hue][crate::api::transforms::Transform::hue],
 //! [Tf::saturation][crate::api::transforms::Transform::saturation], [Tf::value][crate::api::transforms::Transform::value].
+//!
+//! # Ergonomics Macros
+//!
+//! immense provides two ergonomics macros that make defining rules and transform sequences a little
+//! easier once you have an intuition for their semantics. They are [`rule!`] and [`tf!`], which
+//! help compose rules and transform sequences respectively.
+//!
+//! They transform the demo code above into:
+//!
+//! ````
+//! # use immense::*;
+//! rule![
+//!     tf![
+//!         Tf::saturation(0.8),
+//!         Tf::hue(160.0),
+//!         Replicate::n(36, vec![Tf::rz(10.0), Tf::ty(0.1)]),
+//!         Replicate::n(36, vec![Tf::ry(10.0), Tf::tz(1.2), Tf::hue(3.4)]),
+//!     ] => cube(),
+//! ]
+//! # ;
+//! ````
 //!
 //! # Custom Meshes
 //!

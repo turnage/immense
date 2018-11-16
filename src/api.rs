@@ -15,6 +15,16 @@ pub struct Rule {
     invocations: Vec<(Option<Transform>, RuleInternal)>,
 }
 
+/// An ergonomics macro for defining rules out of transformed subrule invocations.
+#[macro_export]
+macro_rules! rule {
+    ($($transforms:expr => $subrule:expr),+ $(,)*) => ({
+        let mut rule = Rule::new();
+        $(let rule = rule.push($transforms, $subrule);)*
+        rule
+    });
+}
+
 impl Rule {
     /// Returns a new rule that contains no subrules.
     pub fn new() -> Rule {

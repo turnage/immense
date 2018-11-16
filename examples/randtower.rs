@@ -7,12 +7,12 @@ struct RandCube;
 
 impl ToRule for RandCube {
     fn to_rule(&self) -> Rule {
-        Rule::new().push(
+        rule![
             *thread_rng()
                 .choose(&[Tf::tx(0.1), Tf::tx(-0.1), Tf::tx(0.2), Tf::tx(-0.2)])
-                .unwrap(),
-            cube(),
-        )
+                .unwrap() =>
+            cube()
+        ]
     }
 }
 

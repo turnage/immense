@@ -7,10 +7,11 @@ struct RecursiveTile {
 
 impl ToRule for RecursiveTile {
     fn to_rule(&self) -> Rule {
-        let rule = Rule::new()
-            .push(vec![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)], icosphere())
-            .push(vec![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)], icosphere())
-            .push(vec![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)], icosphere());
+        let rule = rule![
+            tf![Tf::t(0.25, 0.25, 0.0), Tf::s(0.4)] => icosphere(),
+            tf![Tf::t(-0.25, -0.25, 0.0), Tf::s(0.4)] => icosphere(),
+            tf![Tf::t(-0.25, 0.25, 0.0), Tf::s(0.4)] => icosphere(),
+        ];
         if self.depth_budget > 0 {
             rule.push(
                 vec![Tf::t(0.25, -0.25, 0.0), Tf::s(0.4)],

@@ -8,13 +8,13 @@ struct Grid2D {
 
 impl ToRule for Grid2D {
     fn to_rule(&self) -> Rule {
-        Rule::new().push(
-            vec![
+        rule![
+            tf![
                 Replicate::n(self.rows, Tf::ty(1.1)),
                 Replicate::n(self.cols, Tf::tx(1.1)),
-            ],
+            ] =>
             cube(),
-        )
+        ]
     }
 }
 fn main() {
