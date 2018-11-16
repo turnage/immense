@@ -48,11 +48,7 @@ impl Rule {
     }
 
     /// Adds a subrule to the Rule.
-    pub fn push(
-        mut self,
-        transforms: impl Into<TransformArgument>,
-        rule: impl ToRule + 'static,
-    ) -> Rule {
+    pub fn push(mut self, transforms: impl Into<TransformArgument>, rule: impl ToRule) -> Rule {
         match transforms.into() {
             TransformArgument::Single(transform) => {
                 self.invocations
@@ -180,7 +176,7 @@ impl Iterator for MeshIter {
 }
 
 /// A trait for types that can become rules.
-pub trait ToRule {
+pub trait ToRule: 'static {
     fn to_rule(&self) -> Rule;
 }
 
