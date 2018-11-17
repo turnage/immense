@@ -1,5 +1,7 @@
 # immense
 
+![](https://docs.rs/immense/badge.svg) ![crates.io](https://img.shields.io/crates/v/immense.svg) ![](https://travis-ci.org/turnage/immense.svg?branch=master)
+
 A library for describing 3D meshes with simple composable rules.
 
 ```rust
