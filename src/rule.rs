@@ -30,6 +30,22 @@ pub struct Rule {
 }
 
 /// An ergonomics macro for defining rules out of transformed subrule invocations.
+///
+/// Where normally you would have to write
+///
+/// ````
+/// # use immense::*;
+/// let rule = Rule::new().push(Tf::tx(2.0), cube())
+///                       .push(Tf::s(0.5), cube());
+/// ````
+///
+/// you can write
+///
+/// ````
+/// # use immense::*;
+/// let rule = rule![Tf::tx(2.0) => cube(),
+///                  Tf::s(0.5) => cube()];
+/// ````
 #[macro_export]
 macro_rules! rule {
     ($($transforms:expr => $subrule:expr),+ $(,)*) => ({

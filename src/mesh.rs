@@ -18,6 +18,7 @@ use lazy_static::lazy_static;
 use nalgebra::Matrix4x1;
 use std::rc::Rc;
 
+/// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
 pub type Vertex = Matrix4x1<f32>;
 
 /// Initializes a vertex for a custom mesh.
@@ -72,9 +73,10 @@ lazy_static! {
 /// A custom mesh definition described by a set of vertices, normals, and faces.
 ///
 /// This is a low-level type and you are expected to know what you are doing in this part of the API.
-///     1. There should be a normal for each vertex.
-///     2. Each face is a set of indices to the vertices that the face connects.
-///     3. Vertex indices start at 1, according to the object file standard.
+///
+/// 1. There should be a normal for each vertex if you provide any normals at all.
+/// 2. Each face is a set of indices to the vertices that the face connects.
+/// 3. Vertex indices start at 1, according to the object file standard.
 #[derive(Debug)]
 pub struct Mesh {
     vertices: Vec<Vertex>,

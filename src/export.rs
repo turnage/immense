@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::api::OutputMesh;
+use crate::rule::OutputMesh;
 use failure_derive::Fail;
 use std::fs::File;
 use std::io;

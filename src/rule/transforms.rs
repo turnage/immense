@@ -271,7 +271,7 @@ impl Default for Transform {
 }
 
 /// A TransformArgument is a transform that should be applied to the invocation of a
-/// [Rule][crate::api::Rule].
+/// [Rule][crate::rule::Rule].
 ///
 /// See the [From][std::convert::From] and [Into][std::convert::Into] implementations
 /// which produce this type to find out what kind of argument each type becomes.
@@ -285,6 +285,25 @@ pub enum TransformArgument {
 }
 
 /// An ergonomics macro for listing transforms that will apply in order and branch on replications.
+///
+/// Where normally you would have to write
+///
+/// ````
+/// # use immense::*;
+/// let transforms_with_a_replication = vec![Replicate::n(1, Tf::tx(2.0)),
+///                                          Replicate::n(3, Tf::ty(1.0))];
+/// ````
+///
+/// you can write
+///
+/// ````
+/// # use immense::*;
+/// let transforms_with_a_replication = tf![Tf::tx(2.0), Replicate::n(3, Tf::ty(1.0))];
+/// ````
+///
+/// and the branching of transforms will be the same. Both these when passed to a rule invocation
+/// will invoke a rule twice, applying `Tf::tx(2.0)` and `Tf::ty(1.0)` to the first invocation, and
+/// `Tf::tx(2.0)` and `Tf::ty(2.0)` to the second invocation.
 #[macro_export]
 macro_rules! tf {
     ($($transform:expr),+ $(,)*) => ({

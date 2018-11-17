@@ -1,5 +1,9 @@
 [package]
 name = "immense"
+description = "A library for building 3D structures with simple composable rules."
+homepage = "https://github.com/turnage/immense"
+readme = "readme.md"
+license = "Apache 2.0"
 version = "0.1.0"
 authors = ["Payton Turnage <paytonturnage@gmail.com>"]
 edition = "2018"
@@ -12,7 +16,6 @@ auto_from = "0.1.0"
 failure_derive = "0.1.3"
 palette = "0.4.1"
 genmesh = "0.6.2"
-id-arena = "1.0.0"
 
 [dev-dependencies]
 rand = "0.5.5"

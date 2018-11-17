@@ -43,12 +43,12 @@
 //!
 //! # Intro
 //!
-//! In immense, you create a [Rule][self::api::Rule] that describes your structure, which is
+//! In immense, you create a [Rule][self::rule::Rule] that describes your structure, which is
 //! ultimately composed of [meshes](https://en.wikipedia.org/wiki/Polygon_mesh). immense provides
-//! some builtin meshes, such as [cube][self::api::builtin::cube], and you can create your own rules
+//! some builtin meshes, such as [cube][self::rule::builtin::cube], and you can create your own rules
 //! by using these builtins which you'll see in the next section.
 //!
-//! After you've built your [Rule][self::api::Rule], you can export the meshes it expands to as a
+//! After you've built your [Rule][self::rule::Rule], you can export the meshes it expands to as a
 //! Wavefront object file for the next part of your workflow, whether that is rendering it in Blender,
 //! printing it in your 3D printer, or importing it into your game!
 //!
@@ -77,7 +77,7 @@
 //! ![](https://i.imgur.com/s68Kk0U.png)
 //!
 //! We can translate the cube with the `Tf::t*` family of functions which generate translate
-//! transforms. We'll apply [Tf::tx][api::transforms::Transform::tx] by creating our own rule and
+//! transforms. We'll apply [Tf::tx][rule::transforms::Transform::tx] by creating our own rule and
 //! invoking the cube rule with a transform.
 //!
 //! ````
@@ -87,7 +87,7 @@
 //!
 //! ![](https://i.imgur.com/1nALK9q.png)
 //!
-//! We can replicate transforms with [Replicate][api::transforms::Replicate] which generates
+//! We can replicate transforms with [Replicate][rule::transforms::Replicate] which generates
 //! multiple invocations of a subrule, each with more applications of the same transform applied to
 //! it.
 //!
@@ -106,7 +106,7 @@
 //!
 //! You can generate rules recursively with the api we've covered so far, but doing so would put
 //! your entire rule tree in memory at one time, which can become a problem. immense provides a
-//! trait, [ToRule][api::ToRule], so you can give it types that can instantiate rules when needed.
+//! trait, [ToRule][rule::ToRule], so you can give it types that can instantiate rules when needed.
 //!
 //! ````
 //! # use immense::*;
@@ -142,7 +142,7 @@
 //!
 //! ## Randomness
 //!
-//! Using [ToRule][api::ToRule] to delay rule construction, we can sample some random values
+//! Using [ToRule][rule::ToRule] to delay rule construction, we can sample some random values
 //! each time our type builds a rule.
 //!
 //! ````
@@ -177,8 +177,8 @@
 //! [export_colors][crate::export::ExportConfig::export_colors] and immense will write out colors.
 //!
 //! You can specify colors overrides and transforms in HSV color space using Ogeon's [palette][palette].
-//! See [Tf::color][crate::api::transforms::Transform::color], [Tf::hue][crate::api::transforms::Transform::hue],
-//! [Tf::saturation][crate::api::transforms::Transform::saturation], [Tf::value][crate::api::transforms::Transform::value].
+//! See [Tf::color][crate::rule::transforms::Transform::color], [Tf::hue][crate::rule::transforms::Transform::hue],
+//! [Tf::saturation][crate::rule::transforms::Transform::saturation], [Tf::value][crate::rule::transforms::Transform::value].
 //!
 //! # Ergonomics Macros
 //!
@@ -210,7 +210,8 @@
 //! introduce your own meshes you must be careful not to allocate them more than once. One million
 //! references to a sphere are fine, one million spheres will probably kill the process.
 //!
-//! An example is the sphere builtin which allows you to create a potentially expensive sphere estimation:
+//! An example is the [sphere][self::rule::builtin::sphere] builtin which allows you to create a
+//! potentially expensive sphere estimation:
 //!
 //! ````
 //! # use immense::*;
@@ -222,15 +223,15 @@
 #![feature(custom_attribute)]
 #![feature(bind_by_move_pattern_guards)]
 
-mod api;
 mod error;
 mod export;
 mod mesh;
+mod rule;
 
-pub use crate::api::*;
 pub use crate::error::Error;
 pub use crate::export::{ExportConfig, MeshGrouping};
 pub use crate::mesh::{vertex, Mesh, Vertex};
+pub use crate::rule::*;
 pub use palette::{Hsv, RgbHue};
 
 use crate::error::Result;
