@@ -84,12 +84,14 @@ impl Rule {
                 self.invocations
                     .push((Some(transform), RuleInternal::Invocations(Rc::new(rule))));
             }
-            TransformArgument::Many(transforms) if !transforms.is_empty() => {
+            TransformArgument::Many(ref transforms) if !transforms.is_empty() => {
                 let rule = Rc::new(rule);
                 self.invocations.append(
                     &mut transforms
                         .into_iter()
-                        .map(|transform| (Some(transform), RuleInternal::Invocations(rule.clone())))
+                        .map(|transform| {
+                            (Some(*transform), RuleInternal::Invocations(rule.clone()))
+                        })
                         .collect(),
                 );
             }

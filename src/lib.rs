@@ -220,9 +220,6 @@
 //! let rule = Rule::new().push(Tf::s(2.0), sphere);
 //! ````
 
-#![feature(custom_attribute)]
-#![feature(bind_by_move_pattern_guards)]
-
 mod error;
 mod export;
 mod mesh;

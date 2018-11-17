@@ -1,6 +1,6 @@
 # immense
 
-![](https://docs.rs/immense/badge.svg) ![crates.io](https://img.shields.io/crates/v/immense.svg) ![](https://travis-ci.org/turnage/immense.svg?branch=master)
+[![](https://docs.rs/immense/badge.svg)](https://docs.rs/immense) [![crates.io](https://img.shields.io/crates/v/immense.svg)](https://crates.io/crates/immense) ![](https://travis-ci.org/turnage/immense.svg?branch=master)
 
 A library for describing 3D meshes with simple composable rules.
 
