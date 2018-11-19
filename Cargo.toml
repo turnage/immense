@@ -18,4 +18,7 @@ palette = "0.4.1"
 genmesh = "0.6.2"
 
 [dev-dependencies]
-rand = "0.5.5"
+rand = "0.6"
+hex = "0.3"
+itertools = "0.7"
+noise = "0.5.1"
