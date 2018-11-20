@@ -142,7 +142,8 @@ impl OutputMesh {
         self.transform.unwrap_or(Transform::default()).get_color()
     }
 
-    pub(crate) fn vertices<'a>(&'a self) -> Box<Iterator<Item = Vertex> + 'a> {
+    /// An iterator over the vertices that compose the mesh. Access `.x`, `.y`, and `.z`.
+    pub fn vertices<'a>(&'a self) -> Box<Iterator<Item = Vertex> + 'a> {
         Box::new(
             self.mesh()
                 .vertices()
@@ -153,7 +154,8 @@ impl OutputMesh {
         )
     }
 
-    pub(crate) fn normals<'a>(&'a self) -> Option<Box<Iterator<Item = Vertex> + 'a>> {
+    /// An iterator over the normals of each vertex if they are defined for the mesh.
+    pub fn normals<'a>(&'a self) -> Option<Box<Iterator<Item = Vertex> + 'a>> {
         match self.mesh().normals() {
             Some(ref normals) => Some(Box::new(normals.iter().map(move |v: &Vertex| -> Vertex {
                 self.transform.map(|t| t.apply_to(*v)).unwrap_or(*v)
@@ -162,7 +164,13 @@ impl OutputMesh {
         }
     }
 
-    pub(crate) fn faces<'a>(&'a self) -> impl Iterator<Item = &'a [usize]> {
+    /// An iterator over the faces of the output mesh.
+    /// 
+    /// Important things to note if you are not writing out an object file:
+    /// 
+    /// * These faces are not necessarily triangles.
+    /// * The vertex indices start at 1.
+    pub fn faces<'a>(&'a self) -> impl Iterator<Item = &'a [usize]> {
         self.mesh().faces()
     }
 
