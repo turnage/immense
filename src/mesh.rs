@@ -15,11 +15,11 @@
 use crate::Tf;
 use genmesh::generators::{IcoSphere, IndexedPolygon, SharedVertex};
 use lazy_static::lazy_static;
-use nalgebra::Matrix4x1;
+use nalgebra::base::dimension::{U1, U4};
 use std::rc::Rc;
 
 /// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
-pub type Vertex = Matrix4x1<f32>;
+pub type Vertex = nalgebra::Matrix<f32, U4, U1, nalgebra::MatrixArray<f32, U4, U1>>;
 
 /// Initializes a vertex for a custom mesh.
 pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
