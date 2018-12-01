@@ -155,9 +155,9 @@ impl OutputMesh {
     /// An iterator over the normals of each vertex if they are defined for the mesh.
     pub fn normals<'a>(&'a self) -> Option<impl Iterator<Item = Vertex> + 'a> {
         match self.mesh().normals() {
-            Some(ref normals) => Some(Box::new(normals.iter().map(move |v: &Vertex| -> Vertex {
+            Some(ref normals) => Some(normals.iter().map(move |v: &Vertex| -> Vertex {
                 self.transform.map(|t| t.apply_to(*v)).unwrap_or(*v)
-            }))),
+            })),
             None => None,
         }
     }
